@@ -5,6 +5,9 @@ class ListMaker {
         this.maxZIndex = 100;
         this.debug = false; // Set to true to enable debug logging
         
+        // Header height constant - accounts for min-height + padding + breadcrumbs
+        this.HEADER_HEIGHT = 140;
+        
         // Navigation state for hierarchical views
         this.currentView = 'root'; // 'root' or 'zoomed'
         this.zoomedListId = null;
@@ -708,9 +711,8 @@ class ListMaker {
         const itemWindow = document.querySelector(`[data-item-id="${itemId}"]`);
         if (itemWindow) {
             // Constrain position to keep title bar accessible
-            const headerHeight = 140; // Match the header height used in positioning
             const minX = 0;
-            const minY = headerHeight;
+            const minY = this.HEADER_HEIGHT;
             const maxX = window.innerWidth - 100;
             const maxY = window.innerHeight - 100;
             
@@ -754,9 +756,8 @@ class ListMaker {
         const list = this.lists.find(l => l.id === listId);
         if (list) {
             // Constrain position to keep title bar accessible
-            const headerHeight = 120; // Height of fixed header (consistent with item windows)
             const minX = 0;
-            const minY = headerHeight;
+            const minY = this.HEADER_HEIGHT;
             const maxX = window.innerWidth - 100; // Leave some space on right
             const maxY = window.innerHeight - 100; // Leave some space on bottom
             
@@ -1188,9 +1189,8 @@ class ListMaker {
     }
 
     fixListPosition(list) {
-        const headerHeight = 120;
         const minX = 0;
-        const minY = headerHeight;
+        const minY = this.HEADER_HEIGHT;
         const maxX = window.innerWidth - 100;
         const maxY = window.innerHeight - 100;
         
@@ -1207,24 +1207,23 @@ class ListMaker {
         const offset = index * 30;
         return {
             x: 50 + offset,
-            y: 100 + offset  // Start below the fixed header
+            y: this.HEADER_HEIGHT + offset  // Start below the fixed header
         };
     }
 
     getItemWindowPosition(index = 0) {
-        const headerHeight = 140; // Account for min-height + padding + content + extra margin
         const safeMargin = 20;
         const offset = index * 30;
         return {
             x: 50 + offset,
-            y: headerHeight + safeMargin + offset  // Ensure windows start below header with margin
+            y: this.HEADER_HEIGHT + safeMargin + offset  // Ensure windows start below header with margin
         };
     }
 
     getSmartPosition() {
         // Start with a base position
         const baseX = 100;
-        const baseY = 120;
+        const baseY = this.HEADER_HEIGHT;
         const listWidth = 350;
         const listHeight = 400;
         const margin = 20;
