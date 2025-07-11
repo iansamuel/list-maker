@@ -1279,6 +1279,17 @@ class ListMaker {
         
         const listElement = document.querySelector(`[data-list-id="${listId}"]`);
         if (listElement) {
+            // CRITICAL FIX: Store current position/size before minimizing
+            const list = this.lists.find(l => l.id === listId);
+            if (list) {
+                list.position.x = listElement.offsetLeft;
+                list.position.y = listElement.offsetTop;
+                list.size.width = listElement.offsetWidth;
+                list.size.height = listElement.offsetHeight;
+                list.zIndex = listElement.style.zIndex || '100';
+                this.saveToStorage();
+            }
+            
             listElement.style.display = 'none';
         }
         
@@ -1294,6 +1305,22 @@ class ListMaker {
         
         const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
         if (itemElement) {
+            // CRITICAL FIX: Store current position/size before minimizing
+            const parentListId = parseInt(itemElement.dataset.parentListId);
+            const item = this.findItemById(parseInt(itemId), parentListId);
+            if (item) {
+                // Initialize zoom position/size if not present
+                if (!item.zoomedPosition) item.zoomedPosition = {};
+                if (!item.zoomedSize) item.zoomedSize = {};
+                
+                item.zoomedPosition.x = itemElement.offsetLeft;
+                item.zoomedPosition.y = itemElement.offsetTop;
+                item.zoomedSize.width = itemElement.offsetWidth;
+                item.zoomedSize.height = itemElement.offsetHeight;
+                item.zoomedZIndex = itemElement.style.zIndex || '100';
+                this.saveToStorage();
+            }
+            
             itemElement.style.display = 'none';
         }
         
@@ -1309,6 +1336,20 @@ class ListMaker {
         
         const listElement = document.querySelector(`[data-list-id="${listId}"]`);
         if (listElement) {
+            // CRITICAL FIX: Restore stored position/size when showing
+            const list = this.lists.find(l => l.id === listId);
+            if (list) {
+                // Ensure position is within bounds (especially below header)
+                const minY = this.HEADER_HEIGHT;
+                const safeY = Math.max(minY, list.position.y);
+                
+                listElement.style.left = list.position.x + 'px';
+                listElement.style.top = safeY + 'px';
+                listElement.style.width = list.size.width + 'px';
+                listElement.style.height = list.size.height + 'px';
+                listElement.style.zIndex = list.zIndex;
+            }
+            
             listElement.style.display = '';
             // Bring to front
             this.bringToFront(listId);
@@ -1326,6 +1367,21 @@ class ListMaker {
         
         const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
         if (itemElement) {
+            // CRITICAL FIX: Restore stored position/size when showing
+            const parentListId = parseInt(itemElement.dataset.parentListId);
+            const item = this.findItemById(parseInt(itemId), parentListId);
+            if (item && item.zoomedPosition && item.zoomedSize) {
+                // Ensure position is within bounds (especially below header)
+                const minY = this.HEADER_HEIGHT;
+                const safeY = Math.max(minY, item.zoomedPosition.y);
+                
+                itemElement.style.left = item.zoomedPosition.x + 'px';
+                itemElement.style.top = safeY + 'px';
+                itemElement.style.width = item.zoomedSize.width + 'px';
+                itemElement.style.height = item.zoomedSize.height + 'px';
+                itemElement.style.zIndex = item.zoomedZIndex || '100';
+            }
+            
             itemElement.style.display = '';
             // Bring to front
             this.bringItemWindowToFront(itemId);
