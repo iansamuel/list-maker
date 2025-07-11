@@ -40,6 +40,10 @@ class ListMaker {
         this.bindEvents();
         this.bindWindowEvents();
         this.bindResizeHandler();
+        
+        // Auto-fix any stuck windows on startup
+        this.fixStuckWindows();
+        
         this.render();
     }
 
@@ -838,6 +842,58 @@ class ListMaker {
         console.log('- listMaker.inspectList(id) - inspect a specific list');
         console.log('- listMaker.inspectAll() - inspect all lists');
         console.log('- listMaker.validateState() - check for inconsistencies');
+        console.log('- listMaker.fixStuckWindows() - move all windows below header');
+    }
+
+    fixStuckWindows() {
+        // UTILITY: Move all windows below header boundary
+        console.log('Fixing stuck windows...');
+        let fixedCount = 0;
+        
+        // Fix all list windows
+        this.lists.forEach(list => {
+            if (list.position.y < this.HEADER_HEIGHT) {
+                console.log(`Moving list ${list.id} (${list.title}) from y=${list.position.y} to y=${this.HEADER_HEIGHT}`);
+                list.position.y = this.HEADER_HEIGHT;
+                fixedCount++;
+                
+                // Update DOM element if visible
+                const listElement = document.querySelector(`[data-list-id="${list.id}"]`);
+                if (listElement) {
+                    listElement.style.top = list.position.y + 'px';
+                }
+            }
+        });
+        
+        // Fix all item windows (in zoomed view)
+        this.lists.forEach(list => {
+            this.fixItemPositions(list.items);
+        });
+        
+        this.saveToStorage();
+        console.log(`Fixed ${fixedCount} stuck windows`);
+        return fixedCount;
+    }
+    
+    fixItemPositions(items) {
+        // Recursively fix item positions
+        items.forEach(item => {
+            if (item.zoomedPosition && item.zoomedPosition.y < this.HEADER_HEIGHT) {
+                console.log(`Moving item ${item.id} (${item.text}) from y=${item.zoomedPosition.y} to y=${this.HEADER_HEIGHT}`);
+                item.zoomedPosition.y = this.HEADER_HEIGHT;
+                
+                // Update DOM element if visible
+                const itemElement = document.querySelector(`[data-item-id="${item.id}"]`);
+                if (itemElement) {
+                    itemElement.style.top = item.zoomedPosition.y + 'px';
+                }
+            }
+            
+            // Recursively fix nested items
+            if (item.items && item.items.length > 0) {
+                this.fixItemPositions(item.items);
+            }
+        });
     }
 
     inspectList(listId) {
@@ -1549,9 +1605,11 @@ class ListMaker {
         this.minimizedLists.forEach(listId => {
             const list = this.lists.find(l => l.id === listId);
             if (list) {
+                // Truncate long titles for taskbar
+                const title = list.title.length > 20 ? list.title.substring(0, 20) + '...' : list.title;
                 taskbarHTML += `
-                    <button class="taskbar-item" data-list-id="${listId}" data-action="restore-list">
-                        ${list.title}
+                    <button class="taskbar-item" data-list-id="${listId}" data-action="restore-list" title="${list.title}">
+                        ${title}
                     </button>
                 `;
             }
@@ -1562,9 +1620,11 @@ class ListMaker {
             this.minimizedItems.forEach(itemId => {
                 const item = this.findItemById(itemId, this.zoomedListId);
                 if (item) {
+                    // Truncate long text for taskbar
+                    const text = item.text.length > 20 ? item.text.substring(0, 20) + '...' : item.text;
                     taskbarHTML += `
-                        <button class="taskbar-item" data-item-id="${itemId}" data-action="restore-item">
-                            ${item.text}
+                        <button class="taskbar-item" data-item-id="${itemId}" data-action="restore-item" title="${item.text}">
+                            ${text}
                         </button>
                     `;
                 }
