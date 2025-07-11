@@ -540,6 +540,15 @@ class AppController {
             
             // Create window if it doesn't exist
             if (!window) {
+                console.log(`Creating window for list ${list.id}:`, {
+                    hasPosition: !!list.position,
+                    hasSize: !!list.size,
+                    hasZIndex: !!list.zIndex,
+                    position: list.position,
+                    size: list.size,
+                    zIndex: list.zIndex
+                });
+                
                 window = this.windowSystem.createWindow(list.id, 'list', {
                     title: list.title,
                     position: list.position || this.windowSystem.getSmartPosition(),

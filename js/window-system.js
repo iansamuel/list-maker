@@ -278,15 +278,31 @@ class WindowSystem {
         const window = this.windows.get(id);
         if (!window) return false;
 
+        console.log(`MINIMIZE: Before capturing state for window ${id}:`, {
+            position: window.position,
+            size: window.size
+        });
+
         window.minimized = true;
         this.minimizedWindows.add(id);
 
         // Capture current state before minimizing
         this.captureWindowState(id);
 
+        console.log(`MINIMIZE: After capturing state for window ${id}:`, {
+            position: window.position,
+            size: window.size
+        });
+
         // Hide DOM element
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
+            console.log(`MINIMIZE: DOM element position:`, {
+                left: element.offsetLeft,
+                top: element.offsetTop,
+                width: element.offsetWidth,
+                height: element.offsetHeight
+            });
             element.style.display = 'none';
         }
 
@@ -301,12 +317,26 @@ class WindowSystem {
         const window = this.windows.get(id);
         if (!window) return false;
 
+        console.log(`RESTORE: Restoring window ${id} with data:`, {
+            position: window.position,
+            size: window.size,
+            zIndex: window.zIndex
+        });
+
         window.minimized = false;
         this.minimizedWindows.delete(id);
 
         // Show DOM element
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
+            console.log(`RESTORE: Found DOM element, applying styles:`, {
+                left: window.position.x + 'px',
+                top: window.position.y + 'px',
+                width: window.size.width + 'px',
+                height: window.size.height + 'px',
+                zIndex: window.zIndex
+            });
+
             element.style.display = '';
             
             // Restore position and size
@@ -315,6 +345,15 @@ class WindowSystem {
             element.style.width = window.size.width + 'px';
             element.style.height = window.size.height + 'px';
             element.style.zIndex = window.zIndex;
+
+            console.log(`RESTORE: After applying styles, element position:`, {
+                left: element.offsetLeft,
+                top: element.offsetTop,
+                width: element.offsetWidth,
+                height: element.offsetHeight
+            });
+        } else {
+            console.error(`RESTORE: Could not find DOM element for window ${id}`);
         }
 
         // Bring to front
