@@ -8,6 +8,11 @@ class ListMaker {
         // Header height constant - accounts for min-height + padding + breadcrumbs
         this.HEADER_HEIGHT = 140;
         
+        // Spatial stability system - Snow Leopard architecture
+        this.spatialObserver = null;
+        this.lastKnownSpatialState = new Map();
+        this.isUpdatingDOM = false;
+        
         // Navigation state for hierarchical views
         this.currentView = 'root'; // 'root' or 'zoomed'
         this.zoomedListId = null;
@@ -19,6 +24,13 @@ class ListMaker {
         this.minimizedItems = new Set();
         
         this.init();
+        
+        // Initialize spatial stability system after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.initSpatialStabilitySystem());
+        } else {
+            setTimeout(() => this.initSpatialStabilitySystem(), 100);
+        }
         
         // Make instance globally available for debugging
         window.listMaker = this;
@@ -73,16 +85,19 @@ class ListMaker {
         this.lists.push(newList);
         input.value = '';
         this.saveToStorage();
-        this.render();
         
-        // Bring the new list to the front
-        this.bringToFront(newList.id);
+        // Use spatial-safe update for adding new lists
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
+        
+        // Bring the new list to the front after rendering
+        setTimeout(() => this.bringToFront(newList.id), 50);
     }
 
     deleteList(listId) {
-        this.lists = this.lists.filter(list => list.id !== listId);
-        this.saveToStorage();
-        this.render();
+        // Use the new spatial-stable incremental deletion
+        this.deleteListIncremental(listId);
     }
 
     exportAllLists() {
@@ -171,7 +186,11 @@ class ListMaker {
 
         targetContainer.items.push(newItem);
         this.saveToStorage();
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     deleteItem(listId, itemId, parentPath = null) {
@@ -180,7 +199,11 @@ class ListMaker {
 
         targetContainer.items = targetContainer.items.filter(item => item.id !== itemId);
         this.saveToStorage();
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     updateItem(listId, itemId, newText, parentPath = null) {
@@ -201,7 +224,11 @@ class ListMaker {
         const item = targetContainer.items.splice(oldIndex, 1)[0];
         targetContainer.items.splice(newIndex, 0, item);
         this.saveToStorage();
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     render() {
@@ -567,7 +594,11 @@ class ListMaker {
             item.type = 'sublist';
             item.expanded = true;
             this.saveToStorage();
-            this.render();
+            
+            // Use spatial-safe update instead of full render
+            this.safeSpatialUpdate(() => {
+                this.render();
+            });
         }
     }
 
@@ -579,7 +610,11 @@ class ListMaker {
         if (item && item.type === 'sublist') {
             item.expanded = !item.expanded;
             this.saveToStorage();
-            this.render();
+            
+            // Use spatial-safe update instead of full render
+            this.safeSpatialUpdate(() => {
+                this.render();
+            });
         }
     }
 
@@ -871,6 +906,12 @@ class ListMaker {
     }
 
     captureCurrentState() {
+        // Legacy method - redirect to new spatial stability system
+        this.captureAllSpatialState();
+    }
+
+    // Legacy compatibility wrapper
+    legacyCaptureCurrentState() {
         if (this.currentView === 'root') {
             // Capture regular list positions and sizes
             this.lists.forEach(list => {
@@ -909,28 +950,162 @@ class ListMaker {
         this.saveToStorage();
     }
 
+    // =====================================
+    // SPATIAL STABILITY SYSTEM - SNOW LEOPARD ARCHITECTURE
+    // =====================================
+
+    initSpatialStabilitySystem() {
+        // Set up continuous monitoring of window positions and sizes
+        this.spatialObserver = new MutationObserver((mutations) => {
+            if (!this.isUpdatingDOM) {
+                this.captureAllSpatialState();
+            }
+        });
+
+        // Monitor for changes in the lists container
+        const container = document.getElementById('lists-container');
+        if (container) {
+            this.spatialObserver.observe(container, {
+                childList: true,
+                attributes: true,
+                attributeFilter: ['style'],
+                subtree: true
+            });
+        }
+
+        // Capture initial state
+        setTimeout(() => this.captureAllSpatialState(), 100);
+    }
+
+    captureAllSpatialState() {
+        // Aggressively capture current spatial state of ALL windows
+        const allCards = document.querySelectorAll('.list-card');
+        
+        allCards.forEach(card => {
+            const listId = card.dataset.listId;
+            const itemId = card.dataset.itemId;
+            const key = listId ? `list-${listId}` : `item-${itemId}`;
+            
+            this.lastKnownSpatialState.set(key, {
+                x: card.offsetLeft,
+                y: card.offsetTop,
+                width: card.offsetWidth,
+                height: card.offsetHeight,
+                zIndex: card.style.zIndex || card.computedStyleMap?.get('z-index')?.toString() || '100'
+            });
+            
+            // Also update the data structures
+            if (listId) {
+                const list = this.lists.find(l => l.id === parseInt(listId));
+                if (list) {
+                    list.position.x = card.offsetLeft;
+                    list.position.y = card.offsetTop;
+                    list.size.width = card.offsetWidth;
+                    list.size.height = card.offsetHeight;
+                }
+            } else if (itemId) {
+                const parentListId = parseInt(card.dataset.parentListId);
+                const item = this.findItemById(parseInt(itemId), parentListId);
+                if (item) {
+                    if (!item.zoomedPosition) item.zoomedPosition = {};
+                    if (!item.zoomedSize) item.zoomedSize = {};
+                    item.zoomedPosition.x = card.offsetLeft;
+                    item.zoomedPosition.y = card.offsetTop;
+                    item.zoomedSize.width = card.offsetWidth;
+                    item.zoomedSize.height = card.offsetHeight;
+                }
+            }
+        });
+        
+        this.saveToStorage();
+    }
+
+    restoreSpatialState() {
+        // Defensively restore spatial state from last known good state
+        this.lastKnownSpatialState.forEach((state, key) => {
+            const card = document.querySelector(
+                key.startsWith('list-') ? 
+                `[data-list-id="${key.replace('list-', '')}"]` :
+                `[data-item-id="${key.replace('item-', '')}"]`
+            );
+            
+            if (card) {
+                card.style.left = state.x + 'px';
+                card.style.top = Math.max(this.HEADER_HEIGHT, state.y) + 'px';
+                card.style.width = state.width + 'px';
+                card.style.height = state.height + 'px';
+                card.style.zIndex = state.zIndex;
+            }
+        });
+    }
+
+    deleteListIncremental(listId) {
+        // SPATIAL STABILITY: Incremental deletion without full re-render
+        this.captureAllSpatialState();
+        
+        // Remove from data
+        this.lists = this.lists.filter(list => list.id !== listId);
+        this.saveToStorage();
+        
+        // Remove from DOM incrementally
+        this.isUpdatingDOM = true;
+        const cardToRemove = document.querySelector(`[data-list-id="${listId}"]`);
+        if (cardToRemove) {
+            cardToRemove.remove();
+        }
+        
+        // Clean up spatial tracking
+        this.lastKnownSpatialState.delete(`list-${listId}`);
+        
+        // Update taskbar without full render
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+        
+        // Validate remaining windows are still positioned correctly
+        setTimeout(() => this.restoreSpatialState(), 10);
+    }
+
+    // Override the problematic render calls with spatial-safe versions
+    safeSpatialUpdate(updateFn) {
+        // Capture state before any potentially disruptive operation
+        this.captureAllSpatialState();
+        
+        // Perform the update
+        this.isUpdatingDOM = true;
+        updateFn();
+        this.isUpdatingDOM = false;
+        
+        // Restore spatial state after update
+        setTimeout(() => this.restoreSpatialState(), 10);
+    }
+
     // Zoom functionality
     zoomIntoList(listId) {
         const list = this.lists.find(l => l.id === listId);
         if (!list) return;
 
         // Capture current state before switching views
-        this.captureCurrentState();
+        this.captureAllSpatialState();
 
         this.currentView = 'zoomed';
         this.zoomedListId = listId;
         this.navigationPath = [{ id: listId, title: list.title }];
+        
+        // Zoom is a full view change, so render is appropriate here
         this.render();
     }
 
     zoomOut() {
         // Capture current state before switching views
-        this.captureCurrentState();
+        this.captureAllSpatialState();
 
         this.currentView = 'root';
         this.zoomedListId = null;
         this.zoomedItemId = null;
         this.navigationPath = [];
+        
+        // Zoom is a full view change, so render is appropriate here
         this.render();
     }
 
@@ -1008,25 +1183,41 @@ class ListMaker {
     }
 
     minimizeList(listId) {
-        this.captureCurrentState();
+        this.captureAllSpatialState();
         this.minimizedLists.add(listId);
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     minimizeItem(itemId, parentListId) {
-        this.captureCurrentState();
+        this.captureAllSpatialState();
         this.minimizedItems.add(parseInt(itemId));
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     restoreList(listId) {
         this.minimizedLists.delete(listId);
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     restoreItem(itemId) {
         this.minimizedItems.delete(parseInt(itemId));
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     updateTaskbar() {
@@ -1090,7 +1281,11 @@ class ListMaker {
         if (newText !== null && newText.trim() !== '') {
             item.text = newText.trim();
             this.saveToStorage();
-            this.render();
+            
+            // Use spatial-safe update instead of full render
+            this.safeSpatialUpdate(() => {
+                this.render();
+            });
         }
     }
 
@@ -1102,7 +1297,7 @@ class ListMaker {
         if (!item) return;
 
         // Capture current state before switching views
-        this.captureCurrentState();
+        this.captureAllSpatialState();
 
         // Convert the item to a sublist if it isn't already
         if (item.type !== 'sublist') {
@@ -1120,6 +1315,8 @@ class ListMaker {
         this.navigationPath.push({ id: itemId, title: item.text, type: 'item' });
         
         this.saveToStorage();
+        
+        // Zoom is a full view change, so render is appropriate here
         this.render();
     }
 
@@ -1149,7 +1346,11 @@ class ListMaker {
 
         targetItem.items.push(newItem);
         this.saveToStorage();
-        this.render();
+        
+        // Use spatial-safe update instead of full render
+        this.safeSpatialUpdate(() => {
+            this.render();
+        });
     }
 
     updateListZIndex(listId, zIndex) {
