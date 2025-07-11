@@ -65,6 +65,7 @@ class AppController {
         const container = document.getElementById('lists-container');
         if (container) {
             container.addEventListener('click', (e) => this.handleContainerClick(e));
+            container.addEventListener('mousedown', (e) => this.handleContainerMouseDown(e));
             container.addEventListener('keypress', (e) => this.handleContainerKeypress(e));
             container.addEventListener('blur', (e) => this.handleContainerBlur(e), true);
             this.bindDragEvents(container);
@@ -182,6 +183,11 @@ class AppController {
         if (e.key === 'Enter' && e.target.classList.contains('item-input')) {
             this.handleAddItem(e.target.nextElementSibling);
         }
+    }
+
+    handleContainerMouseDown(e) {
+        // Delegate window management events to WindowSystem
+        this.windowSystem.handleMouseDown(e);
     }
 
     handleContainerBlur(e) {
@@ -510,7 +516,17 @@ class AppController {
         }
 
         const listsHTML = lists.map(list => {
-            const window = this.windowSystem.getWindow(list.id);
+            let window = this.windowSystem.getWindow(list.id);
+            
+            // Create window if it doesn't exist
+            if (!window) {
+                window = this.windowSystem.createWindow(list.id, 'list', {
+                    title: list.title,
+                    position: this.windowSystem.getSmartPosition(),
+                    size: { width: 350, height: 400 }
+                });
+            }
+            
             const listHTML = this.renderList(list, window);
             
             // Hide minimized windows

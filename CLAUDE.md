@@ -121,6 +121,17 @@ npx serve .
 open index.html
 ```
 
+## Git Workflow
+
+**IMPORTANT**: This project follows a specific Git workflow:
+
+1. **Local commits are fine** - Make commits locally to save progress
+2. **Never push without permission** - DO NOT run `git push` without explicit user instruction
+3. **Ask before pushing** - Always wait for user to say "push to GitHub" or similar
+4. **User controls deployment** - The user decides when changes go live
+
+Always commit changes locally for version control, but let the user control when those changes are published to GitHub.
+
 ## File Structure
 
 - `index.html` - Main HTML structure with PWA meta tags

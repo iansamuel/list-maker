@@ -391,13 +391,9 @@ class WindowSystem {
     // ==========================================
 
     bindWindowEvents() {
-        const container = document.getElementById('lists-container');
-        if (!container) return;
-
-        container.addEventListener('mousedown', (e) => {
-            this.handleMouseDown(e);
-        });
-
+        // Note: Events are now handled by AppController and delegated to WindowSystem
+        // This prevents conflicts with other event handlers
+        
         document.addEventListener('mousemove', (e) => {
             this.handleMouseMove(e);
         });
