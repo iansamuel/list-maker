@@ -115,7 +115,7 @@ python -m http.server 8000
 
 ## 🔧 **Development Story**
 
-This project was built over two days using **AI-assisted development** with Claude Code. What started as a simple list app evolved into a sophisticated spatial workspace through iterative feature development:
+This project was initially developed in a single evening session using **AI-assisted development** with Claude Code, with additional polish and deployment completed the following day. What started as a simple list app evolved into a sophisticated spatial workspace through iterative feature development:
 
 1. **Basic List Management** - Create, edit, delete lists
 2. **Nested Sub-lists** - Hierarchical data structures
@@ -150,4 +150,4 @@ This project was created as a demonstration of AI-assisted development. Feel fre
 
 **Built with ❤️ using AI-assisted development**
 
-*A showcase of what's possible when human creativity meets AI assistance over just two days*
+*A showcase of what's possible when human creativity meets AI assistance - from concept to deployment in just one evening plus polish*
