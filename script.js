@@ -642,6 +642,10 @@ class ListMaker {
                 dragOffset.y = e.clientY - cardRect.top;
                 
                 listCard.classList.add('dragging');
+                
+                // Ensure dragged window stays on top during drag
+                listCard.style.zIndex = this.maxZIndex + 1000;
+                
                 e.preventDefault();
             }
         });
@@ -681,6 +685,17 @@ class ListMaker {
         document.addEventListener('mouseup', () => {
             if (draggedCard) {
                 draggedCard.classList.remove('dragging');
+                
+                // Reset z-index to proper value and bring to front properly
+                const listId = parseInt(draggedCard.dataset.listId);
+                const itemId = parseInt(draggedCard.dataset.itemId);
+                
+                if (listId) {
+                    this.bringToFront(listId);
+                } else if (itemId) {
+                    this.bringItemWindowToFront(itemId);
+                }
+                
                 draggedCard = null;
             }
             if (isResizing) {

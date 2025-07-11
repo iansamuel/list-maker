@@ -152,7 +152,8 @@ button:hover {
 .list-card.dragging {
     box-shadow: 0 8px 30px rgba(0,0,0,0.3);
     transform: rotate(2deg);
-    z-index: 1000;
+    z-index: 9999;
+    opacity: 0.95;
 }
 
 .list-card.active {
