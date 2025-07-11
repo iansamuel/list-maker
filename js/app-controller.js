@@ -28,6 +28,7 @@ class AppController {
         this.bindEvents();
         this.bindBreadcrumbEvents();
         this.bindTaskbarEvents();
+        this.setupWindowCallbacks();
         this.render();
         
         // Make globally available for debugging
@@ -38,6 +39,25 @@ class AppController {
         console.log('- app.listEngine.getStats() - data statistics');
         console.log('- app.windowSystem.getStats() - window statistics');
         console.log('- app.windowSystem.enableDebug() - enable window debugging');
+    }
+
+    setupWindowCallbacks() {
+        // Sync WindowSystem changes back to ListEngine for persistence
+        this.windowSystem.onWindowMoved = (id, x, y) => {
+            const list = this.listEngine.getList(id);
+            if (list) {
+                list.position = { x, y };
+                this.listEngine.saveToStorage();
+            }
+        };
+
+        this.windowSystem.onWindowResized = (id, width, height) => {
+            const list = this.listEngine.getList(id);
+            if (list) {
+                list.size = { width, height };
+                this.listEngine.saveToStorage();
+            }
+        };
     }
 
     // ==========================================
@@ -522,8 +542,9 @@ class AppController {
             if (!window) {
                 window = this.windowSystem.createWindow(list.id, 'list', {
                     title: list.title,
-                    position: this.windowSystem.getSmartPosition(),
-                    size: { width: 350, height: 400 }
+                    position: list.position || this.windowSystem.getSmartPosition(),
+                    size: list.size || { width: 350, height: 400 },
+                    zIndex: list.zIndex || 100
                 });
             }
             

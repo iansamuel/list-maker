@@ -137,6 +137,11 @@ class WindowSystem {
             element.style.top = constrainedPos.y + 'px';
         }
 
+        // Notify callback if provided
+        if (this.onWindowMoved) {
+            this.onWindowMoved(id, constrainedPos.x, constrainedPos.y);
+        }
+
         if (this.debug) {
             console.log(`Moved window ${id} to (${constrainedPos.x}, ${constrainedPos.y})`);
         }
@@ -228,6 +233,11 @@ class WindowSystem {
         if (element) {
             element.style.width = constrainedWidth + 'px';
             element.style.height = constrainedHeight + 'px';
+        }
+
+        // Notify callback if provided
+        if (this.onWindowResized) {
+            this.onWindowResized(id, constrainedWidth, constrainedHeight);
         }
 
         if (this.debug) {
