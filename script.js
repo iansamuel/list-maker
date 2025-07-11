@@ -249,18 +249,34 @@ class ListMaker {
             return;
         }
 
-        // CRITICAL FIX: Render ALL lists (including minimized ones) but hide minimized ones
-        // This ensures DOM elements exist for proper restore positioning
-        container.innerHTML = this.lists
-            .map(list => {
-                const listHTML = this.renderList(list);
-                // If the list is minimized, add display: none to the outermost element
-                if (this.minimizedLists.has(list.id)) {
-                    return listHTML.replace('<div class="list-card"', '<div class="list-card" style="display: none;"');
-                }
-                return listHTML;
-            })
-            .join('');
+        // Only render non-minimized lists in the main render
+        // Minimized lists should stay in DOM as-is to preserve their position
+        const visibleLists = this.lists.filter(list => !this.minimizedLists.has(list.id));
+        
+        if (visibleLists.length === 0) {
+            // Show empty state but don't clear minimized windows
+            const emptyStateHTML = '<div class="empty-state">No lists visible. Check taskbar for minimized lists!</div>';
+            
+            // Preserve existing minimized windows in DOM
+            const existingMinimized = Array.from(container.querySelectorAll('.list-card[style*="display: none"]'));
+            container.innerHTML = emptyStateHTML;
+            
+            // Re-add minimized windows to DOM
+            existingMinimized.forEach(element => {
+                container.appendChild(element);
+            });
+        } else {
+            // Preserve existing minimized windows
+            const existingMinimized = Array.from(container.querySelectorAll('.list-card[style*="display: none"]'));
+            
+            // Render visible lists
+            container.innerHTML = visibleLists.map(list => this.renderList(list)).join('');
+            
+            // Re-add minimized windows to DOM
+            existingMinimized.forEach(element => {
+                container.appendChild(element);
+            });
+        }
     }
 
     renderZoomedView(container) {
@@ -1417,34 +1433,16 @@ class ListMaker {
         
         const listElement = document.querySelector(`[data-list-id="${listId}"]`);
         if (listElement) {
-            // CRITICAL FIX: Restore stored position/size when showing
-            const list = this.lists.find(l => l.id === listId);
-            if (list) {
-                // Ensure position is within bounds (especially below header)
-                const minY = this.HEADER_HEIGHT;
-                const safeY = Math.max(minY, list.position.y);
-                
-                // Debug logging BEFORE applying changes
-                console.log(`RESTORE: List ${listId} (${list.title})`);
-                console.log(`  Stored position: (${list.position.x}, ${list.position.y})`);
-                console.log(`  Safe Y position: ${safeY} (minY: ${minY})`);
-                console.log(`  Stored size: ${list.size.width}x${list.size.height}`);
-                console.log(`  Element before restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
-                
-                // Apply stored position and size
-                listElement.style.left = list.position.x + 'px';
-                listElement.style.top = safeY + 'px';
-                listElement.style.width = list.size.width + 'px';
-                listElement.style.height = list.size.height + 'px';
-                listElement.style.zIndex = list.zIndex;
-                
-                // Debug logging AFTER applying changes
-                console.log(`  Element after restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
-                console.log(`  Applied styles: left=${listElement.style.left}, top=${listElement.style.top}`);
-            }
+            // Debug logging BEFORE showing
+            console.log(`RESTORE: List ${listId}`);
+            console.log(`  Element before restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
+            console.log(`  Element current display: ${listElement.style.display}`);
             
-            // Show the element
+            // Simply show the element - it should already be positioned correctly
             listElement.style.display = '';
+            
+            // Debug logging AFTER showing
+            console.log(`  Element after restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
             
             // Bring to front
             this.bringToFront(listId);
