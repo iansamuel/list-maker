@@ -35,8 +35,9 @@ class ListMaker {
         // Make instance globally available for debugging
         window.listMaker = this;
         
-        // Debug version identifier
-        console.log('ListMaker initialized - Version: EVENT_FIX_v1');
+        // Build number tracking
+        this.BUILD_NUMBER = 100;
+        console.log(`🚀 List Maker - Build #${this.BUILD_NUMBER} - Ready!`);
     }
 
     init() {
@@ -131,34 +132,37 @@ class ListMaker {
             return;
         }
 
-        try {
-            // Create export data with metadata
-            const exportData = {
-                exportDate: new Date().toISOString(),
-                version: '1.0',
-                appName: 'List Maker',
-                totalLists: this.lists.length,
-                lists: this.lists.map(list => ({
-                    id: list.id,
-                    title: list.title,
-                    items: this.flattenItems(list.items),
-                    position: list.position,
-                    size: list.size,
-                    zIndex: list.zIndex,
-                    itemCount: this.countAllItems(list.items)
-                }))
-            };
+        // Prompt user for export format
+        const format = prompt('Choose export format:\n\n1. JSON (structured data)\n2. HTML (web page)\n3. Markdown (text format)\n\nEnter 1, 2, or 3:');
+        
+        if (!format || !['1', '2', '3'].includes(format.trim())) {
+            alert('Export cancelled or invalid format selected.');
+            return;
+        }
 
-            // Convert to JSON
-            const jsonString = JSON.stringify(exportData, null, 2);
-            
+        try {
+            let content, mimeType, fileExtension;
+            const dateStr = new Date().toISOString().split('T')[0];
+
+            switch (format.trim()) {
+                case '1':
+                    ({ content, mimeType, fileExtension } = this.exportToJSON());
+                    break;
+                case '2':
+                    ({ content, mimeType, fileExtension } = this.exportToHTML());
+                    break;
+                case '3':
+                    ({ content, mimeType, fileExtension } = this.exportToMarkdown());
+                    break;
+            }
+
             // Create and download file
-            const blob = new Blob([jsonString], { type: 'application/json' });
+            const blob = new Blob([content], { type: mimeType });
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = `list-maker-export-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `list-maker-export-${dateStr}.${fileExtension}`;
             document.body.appendChild(a);
             a.click();
             
@@ -167,12 +171,151 @@ class ListMaker {
             URL.revokeObjectURL(url);
             
             // Show success message
-            alert(`Successfully exported ${this.lists.length} lists!`);
+            alert(`Successfully exported ${this.lists.length} lists as ${fileExtension.toUpperCase()}!`);
             
         } catch (error) {
             console.error('Export failed:', error);
             alert('Export failed. Please try again.');
         }
+    }
+
+    exportToJSON() {
+        // Original JSON export logic
+        const exportData = {
+            exportDate: new Date().toISOString(),
+            version: '1.0',
+            appName: 'List Maker',
+            totalLists: this.lists.length,
+            lists: this.lists.map(list => ({
+                id: list.id,
+                title: list.title,
+                items: this.flattenItems(list.items),
+                position: list.position,
+                size: list.size,
+                zIndex: list.zIndex,
+                itemCount: this.countAllItems(list.items)
+            }))
+        };
+
+        return {
+            content: JSON.stringify(exportData, null, 2),
+            mimeType: 'application/json',
+            fileExtension: 'json'
+        };
+    }
+
+    exportToHTML() {
+        const exportDate = new Date().toISOString();
+        let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>List Maker Export</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; margin: 40px; }
+        .header { border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
+        .list { margin-bottom: 30px; border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+        .list-title { font-size: 1.5em; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }
+        .items { margin-left: 20px; }
+        .item { margin: 8px 0; padding: 5px 0; }
+        .sublist { margin-left: 20px; border-left: 3px solid #9b59b6; padding-left: 15px; margin-top: 10px; }
+        .sublist-title { font-weight: bold; color: #9b59b6; margin-bottom: 8px; }
+        .meta { color: #666; font-size: 0.9em; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 List Maker Export</h1>
+        <p>Exported on ${new Date(exportDate).toLocaleString()}</p>
+        <p>Total Lists: ${this.lists.length}</p>
+    </div>
+`;
+
+        this.lists.forEach(list => {
+            html += `    <div class="list">
+        <div class="list-title">${this.escapeHtml(list.title)}</div>
+        <div class="items">
+${this.renderItemsHTML(list.items)}
+        </div>
+    </div>
+`;
+        });
+
+        html += `    <div class="meta">
+        <p>Generated by <strong>List Maker</strong> - A hierarchical list management application</p>
+        <p>Total items across all lists: ${this.lists.reduce((sum, list) => sum + this.countAllItems(list.items), 0)}</p>
+    </div>
+</body>
+</html>`;
+
+        return {
+            content: html,
+            mimeType: 'text/html',
+            fileExtension: 'html'
+        };
+    }
+
+    exportToMarkdown() {
+        const exportDate = new Date().toISOString();
+        let markdown = `# 📝 List Maker Export
+
+**Exported:** ${new Date(exportDate).toLocaleString()}  
+**Total Lists:** ${this.lists.length}
+
+---
+
+`;
+
+        this.lists.forEach(list => {
+            markdown += `## ${list.title}\n\n`;
+            markdown += this.renderItemsMarkdown(list.items);
+            markdown += '\n---\n\n';
+        });
+
+        markdown += `*Generated by **List Maker** - A hierarchical list management application*  
+*Total items across all lists: ${this.lists.reduce((sum, list) => sum + this.countAllItems(list.items), 0)}*`;
+
+        return {
+            content: markdown,
+            mimeType: 'text/markdown',
+            fileExtension: 'md'
+        };
+    }
+
+    renderItemsHTML(items, level = 0) {
+        let html = '';
+        items.forEach(item => {
+            if (item.type === 'item') {
+                html += `            <div class="item">• ${this.escapeHtml(item.text)}</div>\n`;
+            } else if (item.type === 'sublist') {
+                html += `            <div class="sublist">
+                <div class="sublist-title">📂 ${this.escapeHtml(item.text)}</div>
+${this.renderItemsHTML(item.items, level + 1)}
+            </div>\n`;
+            }
+        });
+        return html;
+    }
+
+    renderItemsMarkdown(items, level = 0) {
+        let markdown = '';
+        items.forEach(item => {
+            const indent = '  '.repeat(level);
+            if (item.type === 'item') {
+                markdown += `${indent}- ${item.text}\n`;
+            } else if (item.type === 'sublist') {
+                markdown += `${indent}- **📂 ${item.text}**\n`;
+                markdown += this.renderItemsMarkdown(item.items, level + 1);
+            }
+        });
+        return markdown;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     flattenItems(items) {
