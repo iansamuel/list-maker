@@ -315,30 +315,35 @@ button:hover {
 }
 
 .taskbar-item {
-    background: #34495e;
-    color: white;
-    border: none;
-    padding: 0.25rem 0.75rem;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    line-height: 1.2;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    transition: background 0.2s;
-    max-width: 200px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    background: #34495e !important;
+    color: white !important;
+    border: none !important;
+    padding: 4px 8px !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    font-size: 0.875rem !important;
+    line-height: 1 !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background 0.2s !important;
+    max-width: 200px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    vertical-align: middle !important;
+    box-sizing: border-box !important;
 }
 
 .taskbar-item:hover {
-    background: #3498db;
+    background: #3498db !important;
 }
 
 .taskbar-item.active {
-    background: #3498db;
+    background: #3498db !important;
 }
 
 .item-input-container {
