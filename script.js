@@ -51,6 +51,7 @@ class ListMaker {
         const createListBtn = document.getElementById('create-list-btn');
         const newListInput = document.getElementById('new-list-input');
         const exportBtn = document.getElementById('export-btn');
+        const taskbarItems = document.getElementById('taskbar-items');
 
         if (!createListBtn || !newListInput || !exportBtn) {
             console.error('Required DOM elements not found:', {
@@ -66,6 +67,25 @@ class ListMaker {
             if (e.key === 'Enter') this.createList();
         });
         exportBtn.addEventListener('click', () => this.exportAllLists());
+        
+        // CRITICAL FIX: Bind taskbar click events ONCE to prevent multiple restore calls
+        if (taskbarItems) {
+            taskbarItems.addEventListener('click', (e) => {
+                if (e.target.classList.contains('taskbar-item')) {
+                    const action = e.target.dataset.action;
+                    const listId = e.target.dataset.listId;
+                    const itemId = e.target.dataset.itemId;
+
+                    console.log(`TASKBAR CLICK: action=${action}, listId=${listId}, itemId=${itemId}`);
+
+                    if (action === 'restore-list' && listId) {
+                        this.restoreList(parseInt(listId));
+                    } else if (action === 'restore-item' && itemId) {
+                        this.restoreItem(parseInt(itemId));
+                    }
+                }
+            });
+        }
         
         // Bind breadcrumb navigation
         this.bindBreadcrumbEvents();
@@ -1364,29 +1384,8 @@ class ListMaker {
         
         const listElement = document.querySelector(`[data-list-id="${listId}"]`);
         if (listElement) {
-            // CRITICAL FIX: Store current position/size before minimizing
-            const list = this.lists.find(l => l.id === listId);
-            if (list) {
-                const oldPosition = {...list.position};
-                const oldSize = {...list.size};
-                
-                list.position.x = listElement.offsetLeft;
-                list.position.y = listElement.offsetTop;
-                list.size.width = listElement.offsetWidth;
-                list.size.height = listElement.offsetHeight;
-                list.zIndex = listElement.style.zIndex || '100';
-                
-                // Debug logging
-                console.log(`MINIMIZE: List ${listId} (${list.title})`);
-                console.log(`  Old position: (${oldPosition.x}, ${oldPosition.y})`);
-                console.log(`  New position: (${list.position.x}, ${list.position.y})`);
-                console.log(`  Old size: ${oldSize.width}x${oldSize.height}`);
-                console.log(`  New size: ${list.size.width}x${list.size.height}`);
-                console.log(`  Element offset: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
-                
-                this.saveToStorage();
-            }
-            
+            // Simply hide the element - it will maintain its position in DOM
+            console.log(`MINIMIZE: List ${listId} at position (${listElement.offsetLeft}, ${listElement.offsetTop})`);
             listElement.style.display = 'none';
         }
         
@@ -1433,16 +1432,9 @@ class ListMaker {
         
         const listElement = document.querySelector(`[data-list-id="${listId}"]`);
         if (listElement) {
-            // Debug logging BEFORE showing
-            console.log(`RESTORE: List ${listId}`);
-            console.log(`  Element before restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
-            console.log(`  Element current display: ${listElement.style.display}`);
-            
-            // Simply show the element - it should already be positioned correctly
+            // Simply show the element - it maintains its position in DOM
+            console.log(`RESTORE: List ${listId} at position (${listElement.offsetLeft}, ${listElement.offsetTop})`);
             listElement.style.display = '';
-            
-            // Debug logging AFTER showing
-            console.log(`  Element after restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
             
             // Bring to front
             this.bringToFront(listId);
@@ -1681,21 +1673,7 @@ class ListMaker {
         }
 
         taskbarItems.innerHTML = taskbarHTML;
-
-        // Bind taskbar click events
-        taskbarItems.addEventListener('click', (e) => {
-            if (e.target.classList.contains('taskbar-item')) {
-                const action = e.target.dataset.action;
-                const listId = e.target.dataset.listId;
-                const itemId = e.target.dataset.itemId;
-
-                if (action === 'restore-list' && listId) {
-                    this.restoreList(parseInt(listId));
-                } else if (action === 'restore-item' && itemId) {
-                    this.restoreItem(parseInt(itemId));
-                }
-            }
-        });
+        // NOTE: Event binding moved to bindEvents() to prevent multiple listeners
     }
 
     editItemInZoomedView(itemId, parentListId) {
