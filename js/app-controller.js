@@ -44,18 +44,22 @@ class AppController {
     setupWindowCallbacks() {
         // Sync WindowSystem changes back to ListEngine for persistence
         this.windowSystem.onWindowMoved = (id, x, y) => {
+            console.log(`CALLBACK: Window ${id} moved to (${x}, ${y})`);
             const list = this.listEngine.getList(id);
             if (list) {
                 list.position = { x, y };
                 this.listEngine.saveToStorage();
+                console.log(`CALLBACK: Saved list position:`, list.position);
             }
         };
 
         this.windowSystem.onWindowResized = (id, width, height) => {
+            console.log(`CALLBACK: Window ${id} resized to ${width}x${height}`);
             const list = this.listEngine.getList(id);
             if (list) {
                 list.size = { width, height };
                 this.listEngine.saveToStorage();
+                console.log(`CALLBACK: Saved list size:`, list.size);
             }
         };
     }
@@ -528,6 +532,7 @@ class AppController {
     }
 
     renderRootView(container) {
+        console.log('RENDER: renderRootView called');
         const lists = this.listEngine.getAllLists();
         
         if (lists.length === 0) {
@@ -540,7 +545,7 @@ class AppController {
             
             // Create window if it doesn't exist
             if (!window) {
-                console.log(`Creating window for list ${list.id}:`, {
+                console.log(`RENDER: Creating window for list ${list.id}:`, {
                     hasPosition: !!list.position,
                     hasSize: !!list.size,
                     hasZIndex: !!list.zIndex,
@@ -554,6 +559,12 @@ class AppController {
                     position: list.position || this.windowSystem.getSmartPosition(),
                     size: list.size || { width: 350, height: 400 },
                     zIndex: list.zIndex || 100
+                });
+            } else {
+                console.log(`RENDER: Using existing window for list ${list.id}:`, {
+                    position: window.position,
+                    size: window.size,
+                    minimized: window.minimized
                 });
             }
             
