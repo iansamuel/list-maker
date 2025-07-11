@@ -196,10 +196,8 @@ class ListMaker {
         targetContainer.items = targetContainer.items.filter(item => item.id !== itemId);
         this.saveToStorage();
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Remove item from DOM without affecting window positions
+        this.deleteItemIncremental(listId, itemId, parentPath);
     }
 
     updateItem(listId, itemId, newText, parentPath = null) {
@@ -591,10 +589,8 @@ class ListMaker {
             item.expanded = true;
             this.saveToStorage();
             
-            // Use spatial-safe update instead of full render
-            this.safeSpatialUpdate(() => {
-                this.render();
-            });
+            // INCREMENTAL UPDATE: Convert item to sublist without affecting window positions
+            this.convertToSubListIncremental(listId, itemId, parentPath);
         }
     }
 
@@ -607,10 +603,8 @@ class ListMaker {
             item.expanded = !item.expanded;
             this.saveToStorage();
             
-            // Use spatial-safe update instead of full render
-            this.safeSpatialUpdate(() => {
-                this.render();
-            });
+            // INCREMENTAL UPDATE: Toggle expanded state without affecting window positions
+            this.toggleExpandedIncremental(listId, itemId, item.expanded, parentPath);
         }
     }
 
@@ -1110,6 +1104,239 @@ class ListMaker {
         // The existing container-level event listeners will handle this new element
     }
 
+    addItemIncremental(listId, newItem, parentPath = null) {
+        // SPATIAL STABILITY: Add item to DOM without affecting window positions
+        this.captureAllSpatialState();
+        this.isUpdatingDOM = true;
+        
+        // Find the target list items container
+        let targetSelector;
+        if (parentPath) {
+            const pathStr = [listId, ...parentPath.slice(1)].join('-');
+            targetSelector = `[data-parent-path="${pathStr}"] .nested-list-items`;
+        } else {
+            targetSelector = `[data-list-id="${listId}"] .list-items`;
+        }
+        
+        const targetContainer = document.querySelector(targetSelector);
+        if (!targetContainer) {
+            this.isUpdatingDOM = false;
+            return;
+        }
+        
+        // Remove empty state if present
+        const emptyState = targetContainer.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // Create new item HTML
+        const parentPathArray = parentPath ? parentPath.slice(1) : [];
+        const itemHTML = this.renderItems([newItem], listId, parentPathArray, parentPathArray.length);
+        
+        // Add to DOM
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = itemHTML;
+        const newItemElement = tempDiv.firstElementChild;
+        
+        targetContainer.appendChild(newItemElement);
+        
+        this.isUpdatingDOM = false;
+    }
+
+    deleteItemIncremental(listId, itemId, parentPath = null) {
+        // SPATIAL STABILITY: Remove item from DOM without affecting window positions
+        this.captureAllSpatialState();
+        this.isUpdatingDOM = true;
+        
+        // Find and remove the specific item element
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            itemElement.remove();
+        }
+        
+        // Check if we need to add empty state back
+        let targetContainer;
+        if (parentPath) {
+            const pathStr = [listId, ...parentPath.slice(1)].join('-');
+            targetContainer = document.querySelector(`[data-parent-path="${pathStr}"] .nested-list-items`);
+        } else {
+            targetContainer = document.querySelector(`[data-list-id="${listId}"] .list-items`);
+        }
+        
+        if (targetContainer && targetContainer.children.length === 0) {
+            targetContainer.innerHTML = '<div class="empty-state">No items yet</div>';
+        }
+        
+        this.isUpdatingDOM = false;
+    }
+
+    convertToSubListIncremental(listId, itemId, parentPath = null) {
+        // SPATIAL STABILITY: Convert item to sublist without affecting window positions
+        this.captureAllSpatialState();
+        this.isUpdatingDOM = true;
+        
+        // Find the item element and update its classes and content
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            // Update classes
+            itemElement.classList.remove('item');
+            itemElement.classList.add('sublist');
+            
+            // Find item content and add expand button if not present
+            const itemContent = itemElement.querySelector('.item-content');
+            if (itemContent) {
+                let expandBtn = itemContent.querySelector('.expand-btn');
+                if (!expandBtn) {
+                    // Create expand button
+                    const expandBtnHTML = `
+                        <button class="expand-btn expanded" 
+                                data-list-id="${listId}" 
+                                data-item-id="${itemId}" 
+                                data-parent-path="${parentPath ? parentPath.join('-') : ''}">
+                            ▼
+                        </button>
+                    `;
+                    
+                    // Insert at the beginning of item content
+                    itemContent.insertAdjacentHTML('afterbegin', expandBtnHTML);
+                }
+                
+                // Remove convert button
+                const convertBtn = itemContent.querySelector('.convert-btn');
+                if (convertBtn) {
+                    convertBtn.remove();
+                }
+            }
+            
+            // Add nested items container if not present
+            let nestedContainer = itemElement.querySelector('.nested-items');
+            if (!nestedContainer) {
+                const currentPath = parentPath ? [...parentPath, itemId] : [itemId];
+                const nestedHTML = `
+                    <div class="nested-items expanded">
+                        <div class="item-input-container">
+                            <input type="text" class="item-input" 
+                                   placeholder="Add new item..." 
+                                   data-list-id="${listId}"
+                                   data-parent-path="${currentPath.join('-')}">
+                            <button class="add-item-btn" 
+                                    data-list-id="${listId}"
+                                    data-parent-path="${currentPath.join('-')}">Add</button>
+                        </div>
+                        <div class="nested-list-items" 
+                             data-list-id="${listId}"
+                             data-parent-path="${currentPath.join('-')}">
+                            <div class="empty-state">No items yet</div>
+                        </div>
+                    </div>
+                `;
+                
+                itemElement.insertAdjacentHTML('beforeend', nestedHTML);
+            }
+        }
+        
+        this.isUpdatingDOM = false;
+    }
+
+    toggleExpandedIncremental(listId, itemId, isExpanded, parentPath = null) {
+        // SPATIAL STABILITY: Toggle expansion without affecting window positions
+        this.isUpdatingDOM = true;
+        
+        // Find the item element
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            // Update expand button
+            const expandBtn = itemElement.querySelector('.expand-btn');
+            if (expandBtn) {
+                expandBtn.textContent = isExpanded ? '▼' : '▶';
+                if (isExpanded) {
+                    expandBtn.classList.add('expanded');
+                } else {
+                    expandBtn.classList.remove('expanded');
+                }
+            }
+            
+            // Update nested items visibility
+            const nestedContainer = itemElement.querySelector('.nested-items');
+            if (nestedContainer) {
+                if (isExpanded) {
+                    nestedContainer.classList.remove('collapsed');
+                    nestedContainer.classList.add('expanded');
+                } else {
+                    nestedContainer.classList.remove('expanded');
+                    nestedContainer.classList.add('collapsed');
+                }
+            }
+        }
+        
+        this.isUpdatingDOM = false;
+    }
+
+    minimizeListIncremental(listId) {
+        // SPATIAL STABILITY: Hide list without affecting other windows
+        this.isUpdatingDOM = true;
+        
+        const listElement = document.querySelector(`[data-list-id="${listId}"]`);
+        if (listElement) {
+            listElement.style.display = 'none';
+        }
+        
+        // Update taskbar
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+    }
+
+    minimizeItemIncremental(itemId) {
+        // SPATIAL STABILITY: Hide item window without affecting other windows
+        this.isUpdatingDOM = true;
+        
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            itemElement.style.display = 'none';
+        }
+        
+        // Update taskbar
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+    }
+
+    restoreListIncremental(listId) {
+        // SPATIAL STABILITY: Show list without affecting other windows
+        this.isUpdatingDOM = true;
+        
+        const listElement = document.querySelector(`[data-list-id="${listId}"]`);
+        if (listElement) {
+            listElement.style.display = '';
+            // Bring to front
+            this.bringToFront(listId);
+        }
+        
+        // Update taskbar
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+    }
+
+    restoreItemIncremental(itemId) {
+        // SPATIAL STABILITY: Show item window without affecting other windows
+        this.isUpdatingDOM = true;
+        
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            itemElement.style.display = '';
+            // Bring to front
+            this.bringItemWindowToFront(itemId);
+        }
+        
+        // Update taskbar
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+    }
+
     // Override the problematic render calls with spatial-safe versions
     safeSpatialUpdate(updateFn) {
         // Capture state before any potentially disruptive operation
@@ -1230,38 +1457,30 @@ class ListMaker {
         this.captureAllSpatialState();
         this.minimizedLists.add(listId);
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Hide list without affecting other windows
+        this.minimizeListIncremental(listId);
     }
 
     minimizeItem(itemId, parentListId) {
         this.captureAllSpatialState();
         this.minimizedItems.add(parseInt(itemId));
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Hide item window without affecting other windows
+        this.minimizeItemIncremental(itemId);
     }
 
     restoreList(listId) {
         this.minimizedLists.delete(listId);
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Show list without affecting other windows
+        this.restoreListIncremental(listId);
     }
 
     restoreItem(itemId) {
         this.minimizedItems.delete(parseInt(itemId));
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Show item window without affecting other windows
+        this.restoreItemIncremental(itemId);
     }
 
     updateTaskbar() {
