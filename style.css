@@ -32,10 +32,12 @@ header {
     border-bottom: 1px solid #ddd;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     z-index: 2000;
-    height: 80px;
+    min-height: 80px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
 }
 
 h1 {
@@ -88,12 +90,41 @@ button:hover {
     background: #219a52;
 }
 
+.breadcrumb-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.breadcrumb-item {
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.breadcrumb-item:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.breadcrumb-item.active {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.breadcrumb-separator {
+    color: #999;
+    margin: 0 0.25rem;
+}
+
 .lists-container {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100vh;
+    height: calc(100vh - 50px);
     overflow: hidden;
     z-index: 1;
 }
@@ -170,6 +201,139 @@ button:hover {
 
 .delete-list-btn:hover {
     background: #c0392b;
+}
+
+.list-header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.zoom-in-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+.zoom-in-btn:hover {
+    background: #2980b9;
+}
+
+.item-window {
+    border: 2px solid #3498db;
+    background: #f8f9fa;
+}
+
+.item-window .list-header {
+    background: #e8f4f8;
+}
+
+.item-details {
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.item-type {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+}
+
+.sub-items-count {
+    color: #3498db;
+}
+
+.edit-item-btn {
+    background: #f39c12;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+.edit-item-btn:hover {
+    background: #e67e22;
+}
+
+.zoom-in-item-btn {
+    background: #9b59b6;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+}
+
+.zoom-in-item-btn:hover {
+    background: #8e44ad;
+}
+
+.minimize-btn {
+    background: #95a5a6;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+
+.minimize-btn:hover {
+    background: #7f8c8d;
+}
+
+.taskbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: #2c3e50;
+    border-top: 1px solid #34495e;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    z-index: 1500;
+}
+
+.taskbar-items {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.taskbar-item {
+    background: #34495e;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.2s;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.taskbar-item:hover {
+    background: #3498db;
+}
+
+.taskbar-item.active {
+    background: #3498db;
 }
 
 .item-input-container {

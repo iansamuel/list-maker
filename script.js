@@ -4,6 +4,17 @@ class ListMaker {
         this.currentId = this.lists.length > 0 ? Math.max(...this.lists.map(l => l.id)) + 1 : 1;
         this.maxZIndex = 100;
         this.debug = false; // Set to true to enable debug logging
+        
+        // Navigation state for hierarchical views
+        this.currentView = 'root'; // 'root' or 'zoomed'
+        this.zoomedListId = null;
+        this.zoomedItemId = null;
+        this.navigationPath = [];
+        
+        // Minimize state
+        this.minimizedLists = new Set();
+        this.minimizedItems = new Set();
+        
         this.init();
         
         // Make instance globally available for debugging
@@ -36,6 +47,9 @@ class ListMaker {
             if (e.key === 'Enter') this.createList();
         });
         exportBtn.addEventListener('click', () => this.exportAllLists());
+        
+        // Bind breadcrumb navigation
+        this.bindBreadcrumbEvents();
     }
 
     createList() {
@@ -190,33 +204,72 @@ class ListMaker {
     render() {
         const container = document.getElementById('lists-container');
         
+        if (this.currentView === 'root') {
+            this.renderRootView(container);
+        } else if (this.currentView === 'zoomed') {
+            this.renderZoomedView(container);
+        }
+        
+        this.bindListEvents();
+        this.updateBreadcrumbs();
+        this.updateTaskbar();
+    }
+
+    renderRootView(container) {
         if (this.lists.length === 0) {
             container.innerHTML = '<div class="empty-state">No lists yet. Create your first list above!</div>';
             return;
         }
 
-        // Store current sizes before re-rendering
-        const currentSizes = {};
-        this.lists.forEach(list => {
-            const existingCard = document.querySelector(`[data-list-id="${list.id}"]`);
-            if (existingCard) {
-                currentSizes[list.id] = {
-                    width: existingCard.offsetWidth,
-                    height: existingCard.offsetHeight
-                };
-            }
-        });
-
-        container.innerHTML = this.lists.map(list => this.renderList(list, currentSizes[list.id])).join('');
-        this.bindListEvents();
+        container.innerHTML = this.lists
+            .filter(list => !this.minimizedLists.has(list.id))
+            .map(list => this.renderList(list))
+            .join('');
     }
 
-    renderList(list, currentSize = null) {
+    renderZoomedView(container) {
+        const zoomedList = this.lists.find(l => l.id === this.zoomedListId);
+        if (!zoomedList) {
+            this.zoomOut();
+            return;
+        }
+
+        let itemsToRender = [];
+        
+        if (this.zoomedItemId) {
+            // We're zoomed into a specific item, show its sub-items
+            const zoomedItem = zoomedList.items.find(i => i.id === this.zoomedItemId);
+            if (!zoomedItem || !zoomedItem.items) {
+                this.zoomOut();
+                return;
+            }
+            itemsToRender = zoomedItem.items;
+        } else {
+            // We're zoomed into a list, show its items
+            itemsToRender = zoomedList.items;
+        }
+
+        if (itemsToRender.length === 0) {
+            container.innerHTML = '<div class="empty-state">No items yet. Add some items to see them as individual lists!</div>';
+            return;
+        }
+
+        // Render each item as a full list window using stored spatial data (skip minimized items)
+        const itemLists = itemsToRender
+            .filter(item => !this.minimizedItems.has(item.id))
+            .map((item, index) => {
+                return this.renderItemAsList(item, zoomedList.id, index);
+            }).join('');
+
+        container.innerHTML = itemLists;
+    }
+
+    renderList(list) {
         const itemsHtml = this.renderItems(list.items, list.id, []);
         
-        // Use current size if available, otherwise use stored size
-        const width = currentSize ? currentSize.width : list.size.width;
-        const height = currentSize ? currentSize.height : list.size.height;
+        // Use stored size from list data
+        const width = list.size.width;
+        const height = list.size.height;
 
         return `
             <div class="list-card" 
@@ -224,7 +277,11 @@ class ListMaker {
                  style="left: ${list.position.x}px; top: ${list.position.y}px; width: ${width}px; height: ${height}px; z-index: ${list.zIndex};">
                 <div class="list-header" data-list-id="${list.id}">
                     <div class="list-title">${list.title}</div>
-                    <button class="delete-list-btn" data-list-id="${list.id}">Delete List</button>
+                    <div class="list-header-actions">
+                        <button class="minimize-btn" data-list-id="${list.id}" title="Minimize this list">−</button>
+                        <button class="zoom-in-btn" data-list-id="${list.id}" title="Zoom into this list">🔍</button>
+                        <button class="delete-list-btn" data-list-id="${list.id}">Delete List</button>
+                    </div>
                 </div>
                 <div class="list-content">
                     <div class="item-input-container">
@@ -335,7 +392,16 @@ class ListMaker {
                 }
             } else if (e.target.classList.contains('add-item-btn')) {
                 const input = e.target.previousElementSibling;
-                this.addItem(listId, input.value, parsedParentPath);
+                const targetItemId = e.target.dataset.itemId;
+                const targetParentListId = e.target.dataset.parentListId;
+                
+                if (targetItemId && targetParentListId) {
+                    // Adding to an item in zoomed view
+                    this.addItemToZoomedItem(targetItemId, targetParentListId, input.value);
+                } else {
+                    // Adding to a regular list
+                    this.addItem(listId, input.value, parsedParentPath);
+                }
                 input.value = '';
             } else if (e.target.classList.contains('delete-item-btn')) {
                 this.deleteItem(listId, itemId, parsedParentPath);
@@ -343,6 +409,32 @@ class ListMaker {
                 this.convertToSubList(listId, itemId, parsedParentPath);
             } else if (e.target.classList.contains('expand-btn')) {
                 this.toggleExpanded(listId, itemId, parsedParentPath);
+            } else if (e.target.classList.contains('zoom-in-btn')) {
+                const zoomItemId = e.target.dataset.itemId;
+                const zoomParentListId = e.target.dataset.parentListId;
+                
+                if (zoomItemId && zoomParentListId) {
+                    // Zooming into an item in zoomed view
+                    this.zoomIntoItem(zoomItemId, zoomParentListId);
+                } else if (listId) {
+                    // Zooming into a regular list
+                    this.zoomIntoList(listId);
+                }
+            } else if (e.target.classList.contains('edit-item-btn')) {
+                this.editItemInZoomedView(e.target.dataset.itemId, e.target.dataset.parentListId);
+            } else if (e.target.classList.contains('zoom-in-item-btn')) {
+                this.zoomIntoItem(e.target.dataset.itemId, e.target.dataset.parentListId);
+            } else if (e.target.classList.contains('minimize-btn')) {
+                const minimizeItemId = e.target.dataset.itemId;
+                const minimizeParentListId = e.target.dataset.parentListId;
+                
+                if (minimizeItemId && minimizeParentListId) {
+                    // Minimizing an item in zoomed view
+                    this.minimizeItem(minimizeItemId, minimizeParentListId);
+                } else if (listId) {
+                    // Minimizing a regular list
+                    this.minimizeList(listId);
+                }
             }
         };
 
@@ -353,8 +445,17 @@ class ListMaker {
                 if (e.target.classList.contains('item-input')) {
                     const listId = parseInt(e.target.dataset.listId);
                     const parentPath = e.target.dataset.parentPath;
-                    const parsedParentPath = parentPath && parentPath !== '' ? [listId, ...parentPath.split('-').map(Number)] : null;
-                    this.addItem(listId, e.target.value, parsedParentPath);
+                    const targetItemId = e.target.dataset.itemId;
+                    const targetParentListId = e.target.dataset.parentListId;
+                    
+                    if (targetItemId && targetParentListId) {
+                        // Adding to an item in zoomed view
+                        this.addItemToZoomedItem(targetItemId, targetParentListId, e.target.value);
+                    } else {
+                        // Adding to a regular list
+                        const parsedParentPath = parentPath && parentPath !== '' ? [listId, ...parentPath.split('-').map(Number)] : null;
+                        this.addItem(listId, e.target.value, parsedParentPath);
+                    }
                     e.target.value = '';
                 }
             }
@@ -435,6 +536,25 @@ class ListMaker {
         return current;
     }
 
+    findItemById(itemId, listId) {
+        const list = this.lists.find(l => l.id === listId);
+        if (!list) return null;
+        
+        // Search through all items in the list recursively
+        const searchItems = (items) => {
+            for (const item of items) {
+                if (item.id === itemId) return item;
+                if (item.items && item.items.length > 0) {
+                    const found = searchItems(item.items);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        
+        return searchItems(list.items);
+    }
+
     convertToSubList(listId, itemId, parentPath = null) {
         const targetContainer = parentPath ? this.findItemByPath(parentPath) : this.lists.find(l => l.id === listId);
         if (!targetContainer) return;
@@ -486,13 +606,21 @@ class ListMaker {
             const listCard = e.target.closest('.list-card');
             if (!listCard) return;
 
+            // Handle both regular lists and item windows
             const listId = parseInt(listCard.dataset.listId);
-            this.bringToFront(listId);
+            const itemId = parseInt(listCard.dataset.itemId);
+            
+            if (listId) {
+                this.bringToFront(listId);
+            } else if (itemId) {
+                this.bringItemWindowToFront(itemId);
+            }
 
             if (e.target.classList.contains('resize-handle')) {
                 isResizing = true;
                 resizeData = {
                     listId: listId,
+                    itemId: itemId,
                     startX: e.clientX,
                     startY: e.clientY,
                     startWidth: listCard.offsetWidth,
@@ -523,7 +651,11 @@ class ListMaker {
                 const newWidth = Math.max(300, resizeData.startWidth + deltaX);
                 const newHeight = Math.max(200, resizeData.startHeight + deltaY);
                 
-                this.updateListSize(resizeData.listId, newWidth, newHeight);
+                if (resizeData.listId) {
+                    this.updateListSize(resizeData.listId, newWidth, newHeight);
+                } else if (resizeData.itemId) {
+                    this.updateItemWindowSize(resizeData.itemId, newWidth, newHeight);
+                }
                 return;
             }
 
@@ -533,7 +665,13 @@ class ListMaker {
                 const newY = e.clientY - dragOffset.y;
                 
                 const listId = parseInt(draggedCard.dataset.listId);
-                this.updateListPosition(listId, newX, newY);
+                const itemId = parseInt(draggedCard.dataset.itemId);
+                
+                if (listId) {
+                    this.updateListPosition(listId, newX, newY);
+                } else if (itemId) {
+                    this.updateItemWindowPosition(itemId, newX, newY);
+                }
             }
         });
 
@@ -559,11 +697,64 @@ class ListMaker {
         }
     }
 
+    bringItemWindowToFront(itemId) {
+        const itemWindow = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemWindow) {
+            itemWindow.style.zIndex = ++this.maxZIndex;
+        }
+    }
+
+    updateItemWindowPosition(itemId, x, y) {
+        const itemWindow = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemWindow) {
+            // Constrain position to keep title bar accessible
+            const headerHeight = 140; // Match the header height used in positioning
+            const minX = 0;
+            const minY = headerHeight;
+            const maxX = window.innerWidth - 100;
+            const maxY = window.innerHeight - 100;
+            
+            const constrainedX = Math.max(minX, Math.min(maxX, x));
+            const constrainedY = Math.max(minY, Math.min(maxY, y));
+            
+            itemWindow.style.left = constrainedX + 'px';
+            itemWindow.style.top = constrainedY + 'px';
+            
+            // Save position to item data
+            const parentListId = parseInt(itemWindow.dataset.parentListId);
+            const item = this.findItemById(itemId, parentListId);
+            if (item) {
+                if (!item.zoomedPosition) item.zoomedPosition = {};
+                item.zoomedPosition.x = constrainedX;
+                item.zoomedPosition.y = constrainedY;
+                this.saveToStorage();
+            }
+        }
+    }
+
+    updateItemWindowSize(itemId, width, height) {
+        const itemWindow = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemWindow) {
+            itemWindow.style.width = width + 'px';
+            itemWindow.style.height = height + 'px';
+            
+            // Save size to item data
+            const parentListId = parseInt(itemWindow.dataset.parentListId);
+            const item = this.findItemById(itemId, parentListId);
+            if (item) {
+                if (!item.zoomedSize) item.zoomedSize = {};
+                item.zoomedSize.width = width;
+                item.zoomedSize.height = height;
+                this.saveToStorage();
+            }
+        }
+    }
+
     updateListPosition(listId, x, y) {
         const list = this.lists.find(l => l.id === listId);
         if (list) {
             // Constrain position to keep title bar accessible
-            const headerHeight = 80; // Height of fixed header
+            const headerHeight = 120; // Height of fixed header (consistent with item windows)
             const minX = 0;
             const minY = headerHeight;
             const maxX = window.innerWidth - 100; // Leave some space on right
@@ -663,6 +854,288 @@ class ListMaker {
         return issues;
     }
 
+    captureCurrentState() {
+        if (this.currentView === 'root') {
+            // Capture regular list positions and sizes
+            this.lists.forEach(list => {
+                const existingCard = document.querySelector(`[data-list-id="${list.id}"]`);
+                if (existingCard) {
+                    list.size.width = existingCard.offsetWidth;
+                    list.size.height = existingCard.offsetHeight;
+                    list.position.x = existingCard.offsetLeft;
+                    list.position.y = existingCard.offsetTop;
+                }
+            });
+        } else if (this.currentView === 'zoomed') {
+            // Capture item window positions and sizes in zoomed view
+            const itemWindows = document.querySelectorAll('[data-item-id]');
+            
+            itemWindows.forEach(window => {
+                const itemId = parseInt(window.dataset.itemId);
+                const parentListId = parseInt(window.dataset.parentListId);
+                
+                // Find the item in the data structure
+                const item = this.findItemById(itemId, parentListId);
+                if (item) {
+                    // Initialize spatial data if it doesn't exist
+                    if (!item.zoomedPosition) item.zoomedPosition = {};
+                    if (!item.zoomedSize) item.zoomedSize = {};
+                    
+                    // Store current position and size
+                    item.zoomedPosition.x = window.offsetLeft;
+                    item.zoomedPosition.y = window.offsetTop;
+                    item.zoomedSize.width = window.offsetWidth;
+                    item.zoomedSize.height = window.offsetHeight;
+                }
+            });
+        }
+        
+        this.saveToStorage();
+    }
+
+    // Zoom functionality
+    zoomIntoList(listId) {
+        const list = this.lists.find(l => l.id === listId);
+        if (!list) return;
+
+        // Capture current state before switching views
+        this.captureCurrentState();
+
+        this.currentView = 'zoomed';
+        this.zoomedListId = listId;
+        this.navigationPath = [{ id: listId, title: list.title }];
+        this.render();
+    }
+
+    zoomOut() {
+        // Capture current state before switching views
+        this.captureCurrentState();
+
+        this.currentView = 'root';
+        this.zoomedListId = null;
+        this.zoomedItemId = null;
+        this.navigationPath = [];
+        this.render();
+    }
+
+    renderItemAsList(item, parentListId, index) {
+        // Use stored spatial data if available, otherwise use default positioning
+        const position = item.zoomedPosition || this.getItemWindowPosition(index);
+        const hasSubItems = item.items && item.items.length > 0;
+        
+        // Use stored size if available, otherwise use default size
+        const width = item.zoomedSize ? item.zoomedSize.width : 350;
+        const height = item.zoomedSize ? item.zoomedSize.height : 400;
+        
+        // Render sub-items as regular list items
+        const itemsHtml = hasSubItems ? this.renderItems(item.items, parentListId, [item.id]) : '';
+        
+        return `
+            <div class="list-card" 
+                 data-item-id="${item.id}" 
+                 data-parent-list-id="${parentListId}"
+                 style="left: ${position.x}px; top: ${position.y}px; width: ${width}px; height: ${height}px; z-index: ${100 + index};">
+                <div class="list-header" data-item-id="${item.id}">
+                    <div class="list-title">${item.text}</div>
+                    <div class="list-header-actions">
+                        <button class="minimize-btn" data-item-id="${item.id}" data-parent-list-id="${parentListId}" title="Minimize this item">−</button>
+                        ${hasSubItems ? `<button class="zoom-in-btn" data-item-id="${item.id}" data-parent-list-id="${parentListId}" title="Zoom into this item">🔍</button>` : ''}
+                        <button class="edit-item-btn" data-item-id="${item.id}" data-parent-list-id="${parentListId}" title="Edit this item">✏️</button>
+                    </div>
+                </div>
+                <div class="list-content">
+                    <div class="item-input-container">
+                        <input type="text" class="item-input" placeholder="Add new item..." data-item-id="${item.id}" data-parent-list-id="${parentListId}">
+                        <button class="add-item-btn" data-item-id="${item.id}" data-parent-list-id="${parentListId}">Add</button>
+                    </div>
+                    <div class="list-items" data-item-id="${item.id}" data-parent-list-id="${parentListId}">
+                        ${itemsHtml || '<div class="empty-state">No items yet</div>'}
+                    </div>
+                </div>
+                <div class="resize-handle" data-item-id="${item.id}"></div>
+            </div>
+        `;
+    }
+
+    bindBreadcrumbEvents() {
+        const breadcrumbNav = document.getElementById('breadcrumb-nav');
+        if (!breadcrumbNav) return;
+
+        breadcrumbNav.addEventListener('click', (e) => {
+            if (e.target.classList.contains('breadcrumb-item')) {
+                const action = e.target.dataset.action;
+                if (action === 'root') {
+                    this.zoomOut();
+                }
+            }
+        });
+    }
+
+    updateBreadcrumbs() {
+        const breadcrumbNav = document.getElementById('breadcrumb-nav');
+        if (!breadcrumbNav) return;
+
+        let breadcrumbHTML = '';
+        
+        if (this.currentView === 'root') {
+            breadcrumbHTML = '<span class="breadcrumb-item active">All Lists</span>';
+        } else if (this.currentView === 'zoomed') {
+            const zoomedList = this.lists.find(l => l.id === this.zoomedListId);
+            breadcrumbHTML = `
+                <span class="breadcrumb-item" data-action="root">All Lists</span>
+                <span class="breadcrumb-separator">></span>
+                <span class="breadcrumb-item active">${zoomedList ? zoomedList.title : 'Unknown List'}</span>
+            `;
+        }
+
+        breadcrumbNav.innerHTML = breadcrumbHTML;
+    }
+
+    minimizeList(listId) {
+        this.captureCurrentState();
+        this.minimizedLists.add(listId);
+        this.render();
+    }
+
+    minimizeItem(itemId, parentListId) {
+        this.captureCurrentState();
+        this.minimizedItems.add(parseInt(itemId));
+        this.render();
+    }
+
+    restoreList(listId) {
+        this.minimizedLists.delete(listId);
+        this.render();
+    }
+
+    restoreItem(itemId) {
+        this.minimizedItems.delete(parseInt(itemId));
+        this.render();
+    }
+
+    updateTaskbar() {
+        const taskbarItems = document.getElementById('taskbar-items');
+        if (!taskbarItems) return;
+
+        let taskbarHTML = '';
+
+        // Add minimized lists
+        this.minimizedLists.forEach(listId => {
+            const list = this.lists.find(l => l.id === listId);
+            if (list) {
+                taskbarHTML += `
+                    <button class="taskbar-item" data-list-id="${listId}" data-action="restore-list">
+                        ${list.title}
+                    </button>
+                `;
+            }
+        });
+
+        // Add minimized items (only in zoomed view)
+        if (this.currentView === 'zoomed') {
+            this.minimizedItems.forEach(itemId => {
+                const item = this.findItemById(itemId, this.zoomedListId);
+                if (item) {
+                    taskbarHTML += `
+                        <button class="taskbar-item" data-item-id="${itemId}" data-action="restore-item">
+                            ${item.text}
+                        </button>
+                    `;
+                }
+            });
+        }
+
+        taskbarItems.innerHTML = taskbarHTML;
+
+        // Bind taskbar click events
+        taskbarItems.addEventListener('click', (e) => {
+            if (e.target.classList.contains('taskbar-item')) {
+                const action = e.target.dataset.action;
+                const listId = e.target.dataset.listId;
+                const itemId = e.target.dataset.itemId;
+
+                if (action === 'restore-list' && listId) {
+                    this.restoreList(parseInt(listId));
+                } else if (action === 'restore-item' && itemId) {
+                    this.restoreItem(parseInt(itemId));
+                }
+            }
+        });
+    }
+
+    editItemInZoomedView(itemId, parentListId) {
+        const parentList = this.lists.find(l => l.id === parseInt(parentListId));
+        if (!parentList) return;
+
+        const item = parentList.items.find(i => i.id === parseInt(itemId));
+        if (!item) return;
+
+        const newText = prompt('Edit item text:', item.text);
+        if (newText !== null && newText.trim() !== '') {
+            item.text = newText.trim();
+            this.saveToStorage();
+            this.render();
+        }
+    }
+
+    zoomIntoItem(itemId, parentListId) {
+        const parentList = this.lists.find(l => l.id === parseInt(parentListId));
+        if (!parentList) return;
+
+        const item = parentList.items.find(i => i.id === parseInt(itemId));
+        if (!item) return;
+
+        // Capture current state before switching views
+        this.captureCurrentState();
+
+        // Convert the item to a sublist if it isn't already
+        if (item.type !== 'sublist') {
+            item.type = 'sublist';
+            item.items = item.items || [];
+            item.expanded = true;
+        }
+
+        // Set up zoom state for this item
+        this.currentView = 'zoomed';
+        this.zoomedListId = parentListId;
+        this.zoomedItemId = itemId;
+        
+        // Update navigation path
+        this.navigationPath.push({ id: itemId, title: item.text, type: 'item' });
+        
+        this.saveToStorage();
+        this.render();
+    }
+
+    addItemToZoomedItem(itemId, parentListId, text) {
+        if (!text || !text.trim()) return;
+
+        const parentList = this.lists.find(l => l.id === parseInt(parentListId));
+        if (!parentList) return;
+
+        const targetItem = parentList.items.find(i => i.id === parseInt(itemId));
+        if (!targetItem) return;
+
+        // Ensure the target item is a sublist
+        if (targetItem.type !== 'sublist') {
+            targetItem.type = 'sublist';
+            targetItem.items = targetItem.items || [];
+            targetItem.expanded = true;
+        }
+
+        const newItem = {
+            id: Date.now(),
+            text: text.trim(),
+            type: 'item',
+            items: [],
+            expanded: true
+        };
+
+        targetItem.items.push(newItem);
+        this.saveToStorage();
+        this.render();
+    }
+
     updateListZIndex(listId, zIndex) {
         const listCard = document.querySelector(`[data-list-id="${listId}"]`);
         if (listCard) {
@@ -715,7 +1188,7 @@ class ListMaker {
     }
 
     fixListPosition(list) {
-        const headerHeight = 80;
+        const headerHeight = 120;
         const minX = 0;
         const minY = headerHeight;
         const maxX = window.innerWidth - 100;
@@ -735,6 +1208,16 @@ class ListMaker {
         return {
             x: 50 + offset,
             y: 100 + offset  // Start below the fixed header
+        };
+    }
+
+    getItemWindowPosition(index = 0) {
+        const headerHeight = 140; // Account for min-height + padding + content + extra margin
+        const safeMargin = 20;
+        const offset = index * 30;
+        return {
+            x: 50 + offset,
+            y: headerHeight + safeMargin + offset  // Ensure windows start below header with margin
         };
     }
 
