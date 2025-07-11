@@ -76,14 +76,13 @@ class WindowSystem {
             size: config.size || { width: 350, height: 400 },
             zIndex: config.zIndex || this.maxZIndex++,
             minimized: false,
+            _createdAt: Date.now(), // For debugging
             ...config
         };
 
         this.windows.set(id, windowConfig);
         
-        if (this.debug) {
-            console.log(`Created window ${id} (${type}) at (${windowConfig.position.x}, ${windowConfig.position.y})`);
-        }
+        console.log(`CREATE: Created window ${id} (${type}) at (${windowConfig.position.x}, ${windowConfig.position.y}) [${windowConfig._createdAt}]`);
         
         return windowConfig;
     }
@@ -278,7 +277,7 @@ class WindowSystem {
         const window = this.windows.get(id);
         if (!window) return false;
 
-        console.log(`MINIMIZE: Before capturing state for window ${id}:`, {
+        console.log(`MINIMIZE: Before capturing state for window ${id} [${window._createdAt}]:`, {
             position: window.position,
             size: window.size
         });
@@ -315,9 +314,12 @@ class WindowSystem {
 
     restoreWindow(id) {
         const window = this.windows.get(id);
-        if (!window) return false;
+        if (!window) {
+            console.error(`RESTORE: No window found for id ${id}`);
+            return false;
+        }
 
-        console.log(`RESTORE: Restoring window ${id} with data:`, {
+        console.log(`RESTORE: Restoring window ${id} [${window._createdAt}] with data:`, {
             position: window.position,
             size: window.size,
             zIndex: window.zIndex
@@ -414,6 +416,12 @@ class WindowSystem {
             window.size.width = element.offsetWidth;
             window.size.height = element.offsetHeight;
             window.zIndex = parseInt(element.style.zIndex) || 100;
+            
+            console.log(`CAPTURE: Captured state for window ${id}:`, {
+                position: window.position,
+                size: window.size,
+                zIndex: window.zIndex
+            });
         }
     }
 

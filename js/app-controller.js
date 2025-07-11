@@ -44,22 +44,18 @@ class AppController {
     setupWindowCallbacks() {
         // Sync WindowSystem changes back to ListEngine for persistence
         this.windowSystem.onWindowMoved = (id, x, y) => {
-            console.log(`CALLBACK: Window ${id} moved to (${x}, ${y})`);
             const list = this.listEngine.getList(id);
             if (list) {
                 list.position = { x, y };
                 this.listEngine.saveToStorage();
-                console.log(`CALLBACK: Saved list position:`, list.position);
             }
         };
 
         this.windowSystem.onWindowResized = (id, width, height) => {
-            console.log(`CALLBACK: Window ${id} resized to ${width}x${height}`);
             const list = this.listEngine.getList(id);
             if (list) {
                 list.size = { width, height };
                 this.listEngine.saveToStorage();
-                console.log(`CALLBACK: Saved list size:`, list.size);
             }
         };
     }
