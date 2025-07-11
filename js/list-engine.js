@@ -7,6 +7,8 @@ class ListEngine {
     constructor() {
         this.lists = [];
         this.currentId = 1;
+        this.lastItemId = 0;
+        this.itemIdCounter = 0;
         this.loadFromStorage();
         this.updateCurrentId();
     }
@@ -408,7 +410,16 @@ ${this.renderItemsHTML(list.items)}
     // ==========================================
 
     generateItemId() {
-        return Date.now() + Math.random(); // Ensure uniqueness
+        // Ensure uniqueness by adding a small counter for same-millisecond calls
+        const timestamp = Date.now();
+        if (this.lastItemId === timestamp) {
+            this.itemIdCounter = (this.itemIdCounter || 0) + 1;
+            return timestamp + this.itemIdCounter;
+        } else {
+            this.lastItemId = timestamp;
+            this.itemIdCounter = 0;
+            return timestamp;
+        }
     }
 
     updateCurrentId() {
