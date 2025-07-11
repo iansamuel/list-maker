@@ -1351,11 +1351,23 @@ class ListMaker {
             // CRITICAL FIX: Store current position/size before minimizing
             const list = this.lists.find(l => l.id === listId);
             if (list) {
+                const oldPosition = {...list.position};
+                const oldSize = {...list.size};
+                
                 list.position.x = listElement.offsetLeft;
                 list.position.y = listElement.offsetTop;
                 list.size.width = listElement.offsetWidth;
                 list.size.height = listElement.offsetHeight;
                 list.zIndex = listElement.style.zIndex || '100';
+                
+                // Debug logging
+                console.log(`MINIMIZE: List ${listId} (${list.title})`);
+                console.log(`  Old position: (${oldPosition.x}, ${oldPosition.y})`);
+                console.log(`  New position: (${list.position.x}, ${list.position.y})`);
+                console.log(`  Old size: ${oldSize.width}x${oldSize.height}`);
+                console.log(`  New size: ${list.size.width}x${list.size.height}`);
+                console.log(`  Element offset: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
+                
                 this.saveToStorage();
             }
             
@@ -1412,6 +1424,13 @@ class ListMaker {
                 const minY = this.HEADER_HEIGHT;
                 const safeY = Math.max(minY, list.position.y);
                 
+                // Debug logging BEFORE applying changes
+                console.log(`RESTORE: List ${listId} (${list.title})`);
+                console.log(`  Stored position: (${list.position.x}, ${list.position.y})`);
+                console.log(`  Safe Y position: ${safeY} (minY: ${minY})`);
+                console.log(`  Stored size: ${list.size.width}x${list.size.height}`);
+                console.log(`  Element before restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
+                
                 // Apply stored position and size
                 listElement.style.left = list.position.x + 'px';
                 listElement.style.top = safeY + 'px';
@@ -1419,10 +1438,9 @@ class ListMaker {
                 listElement.style.height = list.size.height + 'px';
                 listElement.style.zIndex = list.zIndex;
                 
-                // Debug log to verify restoration
-                if (this.debug) {
-                    console.log(`Restoring list ${listId} to position (${list.position.x}, ${safeY}) with size ${list.size.width}x${list.size.height}`);
-                }
+                // Debug logging AFTER applying changes
+                console.log(`  Element after restore: left=${listElement.offsetLeft}, top=${listElement.offsetTop}`);
+                console.log(`  Applied styles: left=${listElement.style.left}, top=${listElement.style.top}`);
             }
             
             // Show the element
