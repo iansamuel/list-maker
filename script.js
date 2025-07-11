@@ -86,13 +86,11 @@ class ListMaker {
         input.value = '';
         this.saveToStorage();
         
-        // Use spatial-safe update for adding new lists
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // TRULY INCREMENTAL: Add new list without any render() calls
+        this.addNewListIncremental(newList);
         
-        // Bring the new list to the front after rendering
-        setTimeout(() => this.bringToFront(newList.id), 50);
+        // Bring the new list to the front
+        this.bringToFront(newList.id);
     }
 
     deleteList(listId) {
@@ -187,10 +185,8 @@ class ListMaker {
         targetContainer.items.push(newItem);
         this.saveToStorage();
         
-        // Use spatial-safe update instead of full render
-        this.safeSpatialUpdate(() => {
-            this.render();
-        });
+        // INCREMENTAL UPDATE: Add item to DOM without affecting window positions
+        this.addItemIncremental(listId, newItem, parentPath);
     }
 
     deleteItem(listId, itemId, parentPath = null) {
@@ -1064,6 +1060,54 @@ class ListMaker {
         
         // Validate remaining windows are still positioned correctly
         setTimeout(() => this.restoreSpatialState(), 10);
+    }
+
+    addNewListIncremental(newList) {
+        // SPATIAL STABILITY: Add new list without disrupting existing windows
+        this.captureAllSpatialState();
+        
+        if (this.currentView !== 'root') {
+            // Only add lists in root view
+            return;
+        }
+        
+        // Create DOM element for new list
+        this.isUpdatingDOM = true;
+        const container = document.getElementById('lists-container');
+        const listHTML = this.renderList(newList);
+        
+        // Insert the new list HTML without affecting existing windows
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = listHTML;
+        const newListElement = tempDiv.firstElementChild;
+        
+        container.appendChild(newListElement);
+        
+        // Bind events for the new list only
+        this.bindListEventsForElement(newListElement);
+        
+        // Update taskbar
+        this.updateTaskbar();
+        
+        this.isUpdatingDOM = false;
+        
+        // Update spatial tracking for the new list
+        this.lastKnownSpatialState.set(`list-${newList.id}`, {
+            x: newList.position.x,
+            y: newList.position.y,
+            width: newList.size.width,
+            height: newList.size.height,
+            zIndex: newList.zIndex.toString()
+        });
+    }
+
+    bindListEventsForElement(element) {
+        // Bind events specifically for a single list element
+        // This prevents full event re-binding that could disrupt other elements
+        const listId = parseInt(element.dataset.listId);
+        
+        // The main event handler already uses event delegation, so no additional binding needed
+        // The existing container-level event listeners will handle this new element
     }
 
     // Override the problematic render calls with spatial-safe versions
