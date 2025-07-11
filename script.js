@@ -249,9 +249,17 @@ class ListMaker {
             return;
         }
 
+        // CRITICAL FIX: Render ALL lists (including minimized ones) but hide minimized ones
+        // This ensures DOM elements exist for proper restore positioning
         container.innerHTML = this.lists
-            .filter(list => !this.minimizedLists.has(list.id))
-            .map(list => this.renderList(list))
+            .map(list => {
+                const listHTML = this.renderList(list);
+                // If the list is minimized, add display: none to the outermost element
+                if (this.minimizedLists.has(list.id)) {
+                    return listHTML.replace('<div class="list-card"', '<div class="list-card" style="display: none;"');
+                }
+                return listHTML;
+            })
             .join('');
     }
 
@@ -282,11 +290,16 @@ class ListMaker {
             return;
         }
 
-        // Render each item as a full list window using stored spatial data (skip minimized items)
+        // CRITICAL FIX: Render ALL items (including minimized ones) but hide minimized ones
+        // This ensures DOM elements exist for proper restore positioning
         const itemLists = itemsToRender
-            .filter(item => !this.minimizedItems.has(item.id))
             .map((item, index) => {
-                return this.renderItemAsList(item, zoomedList.id, index);
+                const itemHTML = this.renderItemAsList(item, zoomedList.id, index);
+                // If the item is minimized, add display: none to the outermost element
+                if (this.minimizedItems.has(item.id)) {
+                    return itemHTML.replace('<div class="list-card"', '<div class="list-card" style="display: none;"');
+                }
+                return itemHTML;
             }).join('');
 
         container.innerHTML = itemLists;
@@ -1399,16 +1412,26 @@ class ListMaker {
                 const minY = this.HEADER_HEIGHT;
                 const safeY = Math.max(minY, list.position.y);
                 
+                // Apply stored position and size
                 listElement.style.left = list.position.x + 'px';
                 listElement.style.top = safeY + 'px';
                 listElement.style.width = list.size.width + 'px';
                 listElement.style.height = list.size.height + 'px';
                 listElement.style.zIndex = list.zIndex;
+                
+                // Debug log to verify restoration
+                if (this.debug) {
+                    console.log(`Restoring list ${listId} to position (${list.position.x}, ${safeY}) with size ${list.size.width}x${list.size.height}`);
+                }
             }
             
+            // Show the element
             listElement.style.display = '';
+            
             // Bring to front
             this.bringToFront(listId);
+        } else {
+            console.warn(`Could not find DOM element for list ${listId} during restore`);
         }
         
         // Update taskbar
@@ -1431,16 +1454,26 @@ class ListMaker {
                 const minY = this.HEADER_HEIGHT;
                 const safeY = Math.max(minY, item.zoomedPosition.y);
                 
+                // Apply stored position and size
                 itemElement.style.left = item.zoomedPosition.x + 'px';
                 itemElement.style.top = safeY + 'px';
                 itemElement.style.width = item.zoomedSize.width + 'px';
                 itemElement.style.height = item.zoomedSize.height + 'px';
                 itemElement.style.zIndex = item.zoomedZIndex || '100';
+                
+                // Debug log to verify restoration
+                if (this.debug) {
+                    console.log(`Restoring item ${itemId} to position (${item.zoomedPosition.x}, ${safeY}) with size ${item.zoomedSize.width}x${item.zoomedSize.height}`);
+                }
             }
             
+            // Show the element
             itemElement.style.display = '';
+            
             // Bring to front
             this.bringItemWindowToFront(itemId);
+        } else {
+            console.warn(`Could not find DOM element for item ${itemId} during restore`);
         }
         
         // Update taskbar
