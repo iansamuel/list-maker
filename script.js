@@ -34,6 +34,9 @@ class ListMaker {
         
         // Make instance globally available for debugging
         window.listMaker = this;
+        
+        // Debug version identifier
+        console.log('ListMaker initialized - Version: EVENT_FIX_v1');
     }
 
     init() {
@@ -269,34 +272,17 @@ class ListMaker {
             return;
         }
 
-        // Only render non-minimized lists in the main render
-        // Minimized lists should stay in DOM as-is to preserve their position
-        const visibleLists = this.lists.filter(list => !this.minimizedLists.has(list.id));
+        // ULTRA SIMPLE FIX: Just render all lists and set display:none on minimized ones
+        const listsHTML = this.lists.map(list => {
+            const listHTML = this.renderList(list);
+            // Add display:none directly to minimized lists
+            if (this.minimizedLists.has(list.id)) {
+                return listHTML.replace('style="', 'style="display: none; ');
+            }
+            return listHTML;
+        }).join('');
         
-        if (visibleLists.length === 0) {
-            // Show empty state but don't clear minimized windows
-            const emptyStateHTML = '<div class="empty-state">No lists visible. Check taskbar for minimized lists!</div>';
-            
-            // Preserve existing minimized windows in DOM
-            const existingMinimized = Array.from(container.querySelectorAll('.list-card[style*="display: none"]'));
-            container.innerHTML = emptyStateHTML;
-            
-            // Re-add minimized windows to DOM
-            existingMinimized.forEach(element => {
-                container.appendChild(element);
-            });
-        } else {
-            // Preserve existing minimized windows
-            const existingMinimized = Array.from(container.querySelectorAll('.list-card[style*="display: none"]'));
-            
-            // Render visible lists
-            container.innerHTML = visibleLists.map(list => this.renderList(list)).join('');
-            
-            // Re-add minimized windows to DOM
-            existingMinimized.forEach(element => {
-                container.appendChild(element);
-            });
-        }
+        container.innerHTML = listsHTML;
     }
 
     renderZoomedView(container) {
