@@ -22,11 +22,14 @@ Pure data management layer - no UI concerns:
 #### **WindowSystem** (`js/window-system.js`)
 Pure spatial window management - no business logic:
 - **Spatial Stability**: "Snow Leopard Architecture" for maintaining positions
+- **Position Validation**: Comprehensive system preventing windows from getting stuck behind header
+- **Automatic Correction**: Real-time position validation with automatic fixes
 - **Window Lifecycle**: Create, destroy, minimize, restore windows
-- **Positioning**: Smart positioning with collision avoidance
-- **Drag & Drop**: Window dragging and resizing
+- **Smart Positioning**: Collision avoidance with validated safe zones
+- **Drag & Drop**: Window dragging and resizing with position constraints
 - **Z-Index Management**: Window layering and focus
 - **Taskbar**: Minimized window management
+- **Position Monitoring**: Periodic validation and automatic correction system
 
 #### **AppController** (`js/app-controller.js`)
 Orchestrates all components - the main director:
@@ -71,9 +74,12 @@ Items can be nested infinitely:
 
 #### Spatial Stability System (WindowSystem)
 - **Snow Leopard Architecture**: Maintains window positions through DOM updates
-- **Window Lifecycle**: Create, destroy, minimize, restore operations
-- **Position Constraints**: Windows cannot be positioned above header (y < 140px)
-- Key methods: `captureAllSpatialState()`, `restoreSpatialState()`, `moveWindow()`, `resizeWindow()`
+- **Position Validation System**: Comprehensive prevention of inaccessible window positions
+- **Automatic Correction**: Real-time validation with immediate fixes for stuck windows
+- **Position Constraints**: Enforced minimum Y position (header + 10px buffer), viewport boundaries
+- **Monitoring System**: Periodic checks (5s intervals) + window resize event handling
+- **Diagnostic Tools**: Position scanning and batch correction utilities
+- Key methods: `validatePosition()`, `fixStuckWindows()`, `scanForPositionIssues()`, `moveWindow()`, `resizeWindow()`
 
 #### Data Management (ListEngine)
 - **Pure Data Layer**: No UI concerns, only business logic
@@ -98,7 +104,10 @@ Items can be nested infinitely:
 ### Debugging Issues
 - Enable debug mode: `listMaker.enableDebug()` in console
 - **Data Issues**: Use `listMaker.listEngine.validateData()` and `listMaker.listEngine.getStats()`
-- **Window Issues**: Use `listMaker.windowSystem.inspectAll()` and `listMaker.windowSystem.fixStuckWindows()`
+- **Position Issues**: Use `listMaker.windowSystem.fixStuckWindows()` for automatic fixes
+- **Position Diagnostics**: Use `listMaker.windowSystem.scanForPositionIssues()` for analysis
+- **Window Issues**: Use `listMaker.windowSystem.inspectAll()` and `listMaker.windowSystem.inspectWindow(id)`
+- **Position Testing**: Use `listMaker.windowSystem.validatePosition(x, y, w, h)` to test coordinates
 - **Application Issues**: Use `listMaker.getStats()` for overall state
 
 ### Working with Components
@@ -147,7 +156,10 @@ Always commit changes locally for version control, but let the user control when
 
 ### Window Management
 - Windows are positioned absolutely within full-screen container
-- Dragging handled by mouse events on `.list-header` elements
+- **Position Validation**: All window positions automatically validated and corrected
+- **Accessibility Enforcement**: Windows cannot be positioned behind header or off-screen
+- **Automatic Monitoring**: System continuously checks for and fixes position issues
+- Dragging handled by mouse events on `.list-header` elements with position constraints
 - Resizing via `.resize-handle` elements in bottom-right corner
 - Z-index management for bringing windows to front
 
@@ -164,10 +176,14 @@ Always commit changes locally for version control, but let the user control when
 
 ## Important Constants
 
-- `HEADER_HEIGHT = 140` - Minimum Y position for windows
-- `BUILD_NUMBER = 100` - Current build tracking
+- `HEADER_HEIGHT = 140` - Header height, determines minimum Y position for windows  
+- `POSITION_CONSTRAINTS.minY = 150` - Enforced minimum Y position (header + 10px buffer)
+- `POSITION_CONSTRAINTS.minVisibleWidth = 50` - Minimum visible window width for accessibility
+- `POSITION_CONSTRAINTS.minVisibleHeight = 30` - Minimum visible window height for title bar access
+- `BUILD_NUMBER = 101` - Current build tracking
 - Default window size: 350x400px
-- Default positions use smart collision avoidance
+- Position monitoring interval: 5000ms (5 seconds)
+- Default positions use smart collision avoidance with validation
 
 ## Testing
 
@@ -186,5 +202,7 @@ No formal test framework. Test manually by:
 3. **Don't modify data directly** - Always use ListEngine methods for data changes
 4. **Don't manipulate windows directly** - Use WindowSystem methods for spatial operations
 5. **Maintain the dependency order** - Scripts must load in correct order (ListEngine, WindowSystem, AppController, Main)
-6. **Respect header height constraint** - Windows must be positioned below y=140
+6. **Trust position validation** - All positioning goes through validation automatically
 7. **Use event delegation** - AppController handles all events through container-level listeners
+8. **Don't manually position windows behind header** - System prevents this automatically
+9. **Rely on automatic correction** - Position monitoring fixes issues without intervention
