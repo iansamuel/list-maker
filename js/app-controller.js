@@ -15,7 +15,7 @@ class AppController {
         this.navigationPath = [];
         
         // Build number tracking
-        this.BUILD_NUMBER = 101;
+        this.BUILD_NUMBER = 102;
         
         this.init();
     }

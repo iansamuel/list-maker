@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI code agents (Claude Code, Gemini Code Assist, etc.) when working with code in this repository.
+
+**Multi-Agent Compatibility**: This documentation is designed to work with various AI coding assistants. The same guidance applies regardless of which agent you're using.
 
 ## Project Overview
 
@@ -34,9 +36,10 @@ Pure spatial window management - no business logic:
 #### **AppController** (`js/app-controller.js`)
 Orchestrates all components - the main director:
 - **Event Delegation**: Routes UI events to appropriate systems
-- **View Management**: Root view vs zoomed view transitions
+- **View Management**: Root view vs zoomed view transitions with position persistence
 - **Rendering**: Coordinates UI updates between data and windows
-- **Navigation**: Breadcrumb system and view state
+- **Navigation**: Hierarchical breadcrumb system with deep navigation support
+- **View State**: Position persistence across view transitions
 - **Integration**: Bridges ListEngine and WindowSystem
 
 #### **Main** (`js/main.js`)
@@ -89,9 +92,11 @@ Items can be nested infinitely:
 
 #### View Orchestration (AppController)
 - **Event Delegation**: Single container-level event listener
-- **View Management**: Root view vs zoomed view transitions
+- **View Management**: Root view vs zoomed view transitions with automatic position persistence
+- **Navigation System**: Hierarchical breadcrumb navigation with clickable path traversal
+- **Position Persistence**: View-specific window arrangement storage and restoration
+- **Deep Navigation**: Support for infinite zoom depth with proper state management
 - **Rendering**: Coordinates between data and windowing systems
-- **Navigation**: Breadcrumb system for hierarchical navigation
 
 ## Common Development Tasks
 
@@ -106,8 +111,10 @@ Items can be nested infinitely:
 - **Data Issues**: Use `listMaker.listEngine.validateData()` and `listMaker.listEngine.getStats()`
 - **Position Issues**: Use `listMaker.windowSystem.fixStuckWindows()` for automatic fixes
 - **Position Diagnostics**: Use `listMaker.windowSystem.scanForPositionIssues()` for analysis
+- **View Positions**: Use `listMaker.windowSystem.viewPositions` to inspect saved arrangements
 - **Window Issues**: Use `listMaker.windowSystem.inspectAll()` and `listMaker.windowSystem.inspectWindow(id)`
 - **Position Testing**: Use `listMaker.windowSystem.validatePosition(x, y, w, h)` to test coordinates
+- **Navigation State**: Use `listMaker.navigationPath` and `listMaker.currentView` to inspect zoom state
 - **Application Issues**: Use `listMaker.getStats()` for overall state
 
 ### Working with Components
@@ -168,6 +175,13 @@ Always commit changes locally for version control, but let the user control when
 - Data migration system for backward compatibility
 - Export functionality supports JSON, HTML, and Markdown formats
 
+### Navigation & View Management
+- **Hierarchical Breadcrumbs**: Full navigation path display with clickable levels
+- **Deep Navigation**: Infinite zoom depth with proper state management
+- **Position Persistence**: Window arrangements saved per view and automatically restored
+- **View Transitions**: Seamless navigation between root, list, and item levels
+- **Smart Restoration**: Position validation ensures windows remain accessible after restoration
+
 ### Performance Optimizations
 - Incremental DOM updates to prevent position loss
 - Event delegation reduces event listener overhead
@@ -180,7 +194,7 @@ Always commit changes locally for version control, but let the user control when
 - `POSITION_CONSTRAINTS.minY = 150` - Enforced minimum Y position (header + 10px buffer)
 - `POSITION_CONSTRAINTS.minVisibleWidth = 50` - Minimum visible window width for accessibility
 - `POSITION_CONSTRAINTS.minVisibleHeight = 30` - Minimum visible window height for title bar access
-- `BUILD_NUMBER = 101` - Current build tracking
+- `BUILD_NUMBER = 102` - Current build tracking
 - Default window size: 350x400px
 - Position monitoring interval: 5000ms (5 seconds)
 - Default positions use smart collision avoidance with validation
@@ -190,10 +204,12 @@ Always commit changes locally for version control, but let the user control when
 No formal test framework. Test manually by:
 1. Creating lists and items
 2. Dragging and resizing windows
-3. Using zoom in/out functionality
-4. Minimizing/restoring windows
-5. Converting items to sublists
-6. Exporting data in different formats
+3. Using zoom in/out functionality with deep navigation
+4. Testing breadcrumb navigation at different zoom levels
+5. Minimizing/restoring windows across view transitions
+6. Converting items to sublists
+7. Verifying position persistence when navigating between views
+8. Exporting data in different formats
 
 ## Common Pitfalls
 
