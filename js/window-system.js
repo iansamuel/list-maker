@@ -98,10 +98,9 @@ class WindowSystem {
 
         // Run initial validation after a short delay
         setTimeout(() => {
-            const issues = this.scanForPositionIssues();
-            if (issues.length > 0) {
-                console.log(`🔍 Initial scan found ${issues.length} position issues`);
-                this.fixStuckWindows();
+            const fixedCount = this.fixStuckWindows();
+            if (fixedCount > 0) {
+                console.log(`🔍 Initial position validation fixed ${fixedCount} windows`);
             }
         }, 1000);
     }
@@ -389,31 +388,15 @@ class WindowSystem {
         const window = this.windows.get(id);
         if (!window) return false;
 
-        console.log(`MINIMIZE: Before capturing state for window ${id} [${window._createdAt}]:`, {
-            position: window.position,
-            size: window.size
-        });
-
         window.minimized = true;
         this.minimizedWindows.add(id);
 
         // Capture current state before minimizing
         this.captureWindowState(id);
 
-        console.log(`MINIMIZE: After capturing state for window ${id}:`, {
-            position: window.position,
-            size: window.size
-        });
-
         // Hide DOM element
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
-            console.log(`MINIMIZE: DOM element position:`, {
-                left: element.offsetLeft,
-                top: element.offsetTop,
-                width: element.offsetWidth,
-                height: element.offsetHeight
-            });
             element.style.display = 'none';
         }
 
@@ -430,12 +413,6 @@ class WindowSystem {
             console.error(`RESTORE: No window found for id ${id}`);
             return false;
         }
-
-        console.log(`RESTORE: Restoring window ${id} [${window._createdAt}] with data:`, {
-            position: window.position,
-            size: window.size,
-            zIndex: window.zIndex
-        });
 
         // Validate and correct position before restoring
         const validPosition = this.validatePosition(
@@ -455,14 +432,6 @@ class WindowSystem {
         // Show DOM element
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
-            console.log(`RESTORE: Found DOM element, applying validated styles:`, {
-                left: validPosition.x + 'px',
-                top: validPosition.y + 'px',
-                width: window.size.width + 'px',
-                height: window.size.height + 'px',
-                zIndex: window.zIndex
-            });
-
             element.style.display = '';
             
             // Restore position and size with validated coordinates
@@ -471,13 +440,6 @@ class WindowSystem {
             element.style.width = window.size.width + 'px';
             element.style.height = window.size.height + 'px';
             element.style.zIndex = window.zIndex;
-
-            console.log(`RESTORE: After applying styles, element position:`, {
-                left: element.offsetLeft,
-                top: element.offsetTop,
-                width: element.offsetWidth,
-                height: element.offsetHeight
-            });
         } else {
             console.error(`RESTORE: Could not find DOM element for window ${id}`);
         }
@@ -497,7 +459,6 @@ class WindowSystem {
     // ==========================================
 
     captureAllSpatialState() {
-        console.log('SPATIAL: captureAllSpatialState called');
         const allCards = document.querySelectorAll('.list-card');
         
         allCards.forEach(card => {
@@ -520,18 +481,11 @@ class WindowSystem {
                 // Update window config only if not minimized
                 const window = this.windows.get(parseInt(id));
                 if (window && !window.minimized) {
-                    console.log(`SPATIAL: Updating window ${id} position from DOM:`, {
-                        old: { x: window.position.x, y: window.position.y },
-                        new: { x: card.offsetLeft, y: card.offsetTop }
-                    });
-                    
                     window.position.x = card.offsetLeft;
                     window.position.y = card.offsetTop;
                     window.size.width = card.offsetWidth;
                     window.size.height = card.offsetHeight;
                     window.zIndex = parseInt(card.style.zIndex) || 100;
-                } else if (window && window.minimized) {
-                    console.log(`SPATIAL: Skipping minimized window ${id}`);
                 }
             }
         });
@@ -548,12 +502,6 @@ class WindowSystem {
             window.size.width = element.offsetWidth;
             window.size.height = element.offsetHeight;
             window.zIndex = parseInt(element.style.zIndex) || 100;
-            
-            console.log(`CAPTURE: Captured state for window ${id}:`, {
-                position: window.position,
-                size: window.size,
-                zIndex: window.zIndex
-            });
         }
     }
 
