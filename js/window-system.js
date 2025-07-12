@@ -373,6 +373,7 @@ class WindowSystem {
     // ==========================================
 
     captureAllSpatialState() {
+        console.log('SPATIAL: captureAllSpatialState called');
         const allCards = document.querySelectorAll('.list-card');
         
         allCards.forEach(card => {
@@ -392,14 +393,21 @@ class WindowSystem {
                     zIndex: card.style.zIndex || '100'
                 });
                 
-                // Update window config
+                // Update window config only if not minimized
                 const window = this.windows.get(parseInt(id));
-                if (window) {
+                if (window && !window.minimized) {
+                    console.log(`SPATIAL: Updating window ${id} position from DOM:`, {
+                        old: { x: window.position.x, y: window.position.y },
+                        new: { x: card.offsetLeft, y: card.offsetTop }
+                    });
+                    
                     window.position.x = card.offsetLeft;
                     window.position.y = card.offsetTop;
                     window.size.width = card.offsetWidth;
                     window.size.height = card.offsetHeight;
                     window.zIndex = parseInt(card.style.zIndex) || 100;
+                } else if (window && window.minimized) {
+                    console.log(`SPATIAL: Skipping minimized window ${id}`);
                 }
             }
         });
