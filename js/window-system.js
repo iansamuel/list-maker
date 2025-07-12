@@ -25,6 +25,9 @@ class WindowSystem {
         this.lastKnownSpatialState = new Map();
         this.isUpdatingDOM = false;
         
+        // View-specific position storage
+        this.viewPositions = new Map(); // viewKey -> Map(windowId -> position)
+        
         // Minimize state
         this.minimizedWindows = new Set();
         
@@ -524,6 +527,107 @@ class WindowSystem {
     }
 
     // ==========================================
+    // VIEW-SPECIFIC POSITION MANAGEMENT
+    // ==========================================
+
+    /**
+     * Saves current window positions for a specific view context
+     * @param {string} viewKey - Unique identifier for the view (e.g., "root", "list-123", "item-456")
+     */
+    savePositionsForView(viewKey) {
+        const positions = new Map();
+        
+        this.windows.forEach((window, id) => {
+            if (!window.minimized) {
+                // Capture current DOM position
+                const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
+                if (element) {
+                    positions.set(id, {
+                        x: element.offsetLeft,
+                        y: element.offsetTop,
+                        width: element.offsetWidth,
+                        height: element.offsetHeight,
+                        zIndex: parseInt(element.style.zIndex) || 100
+                    });
+                } else {
+                    // Fallback to stored position
+                    positions.set(id, {
+                        x: window.position.x,
+                        y: window.position.y,
+                        width: window.size.width,
+                        height: window.size.height,
+                        zIndex: window.zIndex
+                    });
+                }
+            }
+        });
+        
+        this.viewPositions.set(viewKey, positions);
+        console.log(`💾 Saved positions for view: ${viewKey} (${positions.size} windows)`);
+    }
+
+    /**
+     * Restores window positions for a specific view context
+     * @param {string} viewKey - Unique identifier for the view
+     */
+    restorePositionsForView(viewKey) {
+        const positions = this.viewPositions.get(viewKey);
+        if (!positions) {
+            console.log(`📂 No saved positions for view: ${viewKey}`);
+            return;
+        }
+
+        let restoredCount = 0;
+        positions.forEach((savedPos, windowId) => {
+            const window = this.windows.get(windowId);
+            if (window && !window.minimized) {
+                // Validate position before applying
+                const validPos = this.validatePosition(savedPos.x, savedPos.y, savedPos.width, savedPos.height);
+                
+                // Update window config
+                window.position.x = validPos.x;
+                window.position.y = validPos.y;
+                window.size.width = savedPos.width;
+                window.size.height = savedPos.height;
+                window.zIndex = savedPos.zIndex;
+
+                // Update DOM element
+                const element = document.querySelector(`[data-${window.type}-id="${windowId}"]`);
+                if (element) {
+                    element.style.left = validPos.x + 'px';
+                    element.style.top = validPos.y + 'px';
+                    element.style.width = savedPos.width + 'px';
+                    element.style.height = savedPos.height + 'px';
+                    element.style.zIndex = savedPos.zIndex;
+                    restoredCount++;
+                }
+            }
+        });
+
+        console.log(`📂 Restored positions for view: ${viewKey} (${restoredCount} windows)`);
+    }
+
+    /**
+     * Generates a view key for the current application state
+     * @param {string} currentView - 'root' or 'zoomed'
+     * @param {number} zoomedListId - ID of zoomed list (if any)
+     * @param {number} zoomedItemId - ID of zoomed item (if any)
+     * @returns {string} Unique view key
+     */
+    generateViewKey(currentView, zoomedListId = null, zoomedItemId = null) {
+        if (currentView === 'root') {
+            return 'root';
+        } else if (currentView === 'zoomed') {
+            if (zoomedItemId) {
+                return `list-${zoomedListId}-item-${zoomedItemId}`;
+            } else {
+                return `list-${zoomedListId}`;
+            }
+        }
+        return 'unknown';
+    }
+
+    // ==========================================
     // EVENT HANDLING
     // ==========================================
 
@@ -804,6 +908,9 @@ class WindowSystem {
         console.log('- windowSystem.fixStuckWindows() - fix stuck windows automatically');
         console.log('- windowSystem.scanForPositionIssues() - scan for position issues');
         console.log('- windowSystem.validatePosition(x, y, w, h) - test position validation');
+        console.log('- windowSystem.savePositionsForView(viewKey) - save current positions');
+        console.log('- windowSystem.restorePositionsForView(viewKey) - restore saved positions');
+        console.log('- windowSystem.viewPositions - inspect all saved view positions');
         console.log('- windowSystem.captureAllSpatialState() - capture state');
         console.log('- windowSystem.restoreSpatialState() - restore state');
     }

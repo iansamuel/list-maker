@@ -421,6 +421,9 @@ class AppController {
                 const action = e.target.dataset.action;
                 if (action === 'root') {
                     this.zoomOut();
+                } else if (action === 'zoom-to') {
+                    const pathIndex = parseInt(e.target.dataset.pathIndex);
+                    this.zoomToLevel(pathIndex);
                 }
             }
         });
@@ -454,12 +457,17 @@ class AppController {
         if (this.currentView === 'root') {
             breadcrumbHTML = '<span class="breadcrumb-item active">All Lists</span>';
         } else if (this.currentView === 'zoomed') {
-            const zoomedList = this.listEngine.getList(this.zoomedListId);
-            breadcrumbHTML = `
-                <span class="breadcrumb-item" data-action="root">All Lists</span>
-                <span class="breadcrumb-separator">></span>
-                <span class="breadcrumb-item active">${zoomedList ? zoomedList.title : 'Unknown List'}</span>
-            `;
+            // Build breadcrumb from navigation path
+            breadcrumbHTML = '<span class="breadcrumb-item" data-action="root">All Lists</span>';
+            
+            this.navigationPath.forEach((pathItem, index) => {
+                const isLast = index === this.navigationPath.length - 1;
+                const isActive = isLast ? 'active' : '';
+                const dataAction = isLast ? '' : `data-action="zoom-to" data-path-index="${index}"`;
+                
+                breadcrumbHTML += '<span class="breadcrumb-separator"> > </span>';
+                breadcrumbHTML += `<span class="breadcrumb-item ${isActive}" ${dataAction}>${pathItem.title}</span>`;
+            });
         }
 
         breadcrumbNav.innerHTML = breadcrumbHTML;
@@ -469,17 +477,27 @@ class AppController {
         const list = this.listEngine.getList(listId);
         if (!list) return;
 
-        this.windowSystem.captureAllSpatialState();
+        // Save positions for current view before transitioning
+        const currentViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        this.windowSystem.savePositionsForView(currentViewKey);
 
         this.currentView = 'zoomed';
         this.zoomedListId = listId;
         this.navigationPath = [{ id: listId, title: list.title }];
         
         this.render();
+
+        // Restore positions for the new view after rendering
+        const newViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        setTimeout(() => {
+            this.windowSystem.restorePositionsForView(newViewKey);
+        }, 100);
     }
 
     zoomOut() {
-        this.windowSystem.captureAllSpatialState();
+        // Save positions for current view before transitioning
+        const currentViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        this.windowSystem.savePositionsForView(currentViewKey);
 
         this.currentView = 'root';
         this.zoomedListId = null;
@@ -487,13 +505,20 @@ class AppController {
         this.navigationPath = [];
         
         this.render();
+
+        // Restore positions for the root view after rendering
+        setTimeout(() => {
+            this.windowSystem.restorePositionsForView('root');
+        }, 100);
     }
 
     zoomIntoItem(itemId, parentListId) {
         const item = this.listEngine.findItemById(itemId, parentListId);
         if (!item) return;
 
-        this.windowSystem.captureAllSpatialState();
+        // Save positions for current view before transitioning
+        const currentViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        this.windowSystem.savePositionsForView(currentViewKey);
 
         // Convert to sublist if needed
         if (item.type !== 'sublist') {
@@ -507,6 +532,43 @@ class AppController {
         this.navigationPath.push({ id: itemId, title: item.text, type: 'item' });
         
         this.render();
+
+        // Restore positions for the new view after rendering
+        const newViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        setTimeout(() => {
+            this.windowSystem.restorePositionsForView(newViewKey);
+        }, 100);
+    }
+
+    zoomToLevel(pathIndex) {
+        if (pathIndex < 0 || pathIndex >= this.navigationPath.length) return;
+
+        // Save positions for current view before transitioning
+        const currentViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        this.windowSystem.savePositionsForView(currentViewKey);
+
+        // Trim navigation path to the specified level
+        this.navigationPath = this.navigationPath.slice(0, pathIndex + 1);
+        
+        const targetLevel = this.navigationPath[pathIndex];
+        
+        if (pathIndex === 0) {
+            // Zooming back to the root list level
+            this.zoomedListId = targetLevel.id;
+            this.zoomedItemId = null;
+        } else {
+            // Zooming to a specific item level
+            this.zoomedListId = this.navigationPath[0].id; // Root list
+            this.zoomedItemId = targetLevel.id;
+        }
+
+        this.render();
+
+        // Restore positions for the target view after rendering
+        const newViewKey = this.windowSystem.generateViewKey(this.currentView, this.zoomedListId, this.zoomedItemId);
+        setTimeout(() => {
+            this.windowSystem.restorePositionsForView(newViewKey);
+        }, 100);
     }
 
     // ==========================================
