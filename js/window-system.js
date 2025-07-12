@@ -10,6 +10,16 @@ class WindowSystem {
         this.HEADER_HEIGHT = 140;
         this.debug = false;
         
+        // Position validation constants
+        this.POSITION_CONSTRAINTS = {
+            minX: 0,
+            minY: this.HEADER_HEIGHT + 10, // 10px buffer below header
+            maxXOffset: 100, // Minimum visible width from right edge
+            maxYOffset: 100, // Minimum visible height from bottom edge
+            minVisibleWidth: 50, // Minimum visible window width
+            minVisibleHeight: 30  // Minimum visible window height (enough for title bar)
+        };
+        
         // Spatial stability system
         this.spatialObserver = null;
         this.lastKnownSpatialState = new Map();
@@ -35,6 +45,7 @@ class WindowSystem {
         this.bindWindowEvents();
         this.bindResizeHandler();
         this.initSpatialStabilitySystem();
+        this.initPositionMonitoring();
         
         // Make globally available for debugging
         window.windowSystem = this;
@@ -64,16 +75,58 @@ class WindowSystem {
         setTimeout(() => this.captureAllSpatialState(), 100);
     }
 
+    initPositionMonitoring() {
+        // Set up periodic position validation to catch any windows that might get stuck
+        this.positionMonitorInterval = setInterval(() => {
+            const issues = this.scanForPositionIssues();
+            if (issues.length > 0) {
+                console.warn(`🚨 Found ${issues.length} position issues - auto-correcting...`);
+                this.fixStuckWindows();
+            }
+        }, 5000); // Check every 5 seconds
+
+        // Monitor window resize events to revalidate positions
+        window.addEventListener('resize', () => {
+            // Small delay to let the resize settle
+            setTimeout(() => {
+                const fixedCount = this.fixStuckWindows();
+                if (fixedCount > 0) {
+                    console.log(`📐 Window resized - fixed ${fixedCount} windows`);
+                }
+            }, 100);
+        });
+
+        // Run initial validation after a short delay
+        setTimeout(() => {
+            const issues = this.scanForPositionIssues();
+            if (issues.length > 0) {
+                console.log(`🔍 Initial scan found ${issues.length} position issues`);
+                this.fixStuckWindows();
+            }
+        }, 1000);
+    }
+
     // ==========================================
     // WINDOW LIFECYCLE
     // ==========================================
 
     createWindow(id, type, config = {}) {
+        const proposedPosition = config.position || this.getSmartPosition();
+        const proposedSize = config.size || { width: 350, height: 400 };
+        
+        // Validate the proposed position
+        const validPosition = this.validatePosition(
+            proposedPosition.x, 
+            proposedPosition.y, 
+            proposedSize.width, 
+            proposedSize.height
+        );
+
         const windowConfig = {
             id,
             type, // 'list' or 'item'
-            position: config.position || this.getSmartPosition(),
-            size: config.size || { width: 350, height: 400 },
+            position: validPosition,
+            size: proposedSize,
             zIndex: config.zIndex || this.maxZIndex++,
             minimized: false,
             _createdAt: Date.now(), // For debugging
@@ -124,40 +177,99 @@ class WindowSystem {
         const window = this.windows.get(id);
         if (!window) return false;
 
-        // Constrain position
-        const constrainedPos = this.constrainPosition(x, y);
-        window.position.x = constrainedPos.x;
-        window.position.y = constrainedPos.y;
+        // Validate and correct position using new validation system
+        const validPos = this.validatePosition(x, y, window.size.width, window.size.height);
+        window.position.x = validPos.x;
+        window.position.y = validPos.y;
 
         // Update DOM
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
-            element.style.left = constrainedPos.x + 'px';
-            element.style.top = constrainedPos.y + 'px';
+            element.style.left = validPos.x + 'px';
+            element.style.top = validPos.y + 'px';
         }
 
         // Notify callback if provided
         if (this.onWindowMoved) {
-            this.onWindowMoved(id, constrainedPos.x, constrainedPos.y);
+            this.onWindowMoved(id, validPos.x, validPos.y);
         }
 
         if (this.debug) {
-            console.log(`Moved window ${id} to (${constrainedPos.x}, ${constrainedPos.y})`);
+            console.log(`Moved window ${id} to (${validPos.x}, ${validPos.y})`);
         }
 
         return true;
     }
 
-    constrainPosition(x, y) {
-        const minX = 0;
-        const minY = this.HEADER_HEIGHT;
-        const maxX = window.innerWidth - 100;
-        const maxY = window.innerHeight - 100;
+    // ==========================================
+    // POSITION VALIDATION SYSTEM
+    // ==========================================
 
-        return {
-            x: Math.max(minX, Math.min(maxX, x)),
-            y: Math.max(minY, Math.min(maxY, y))
-        };
+    /**
+     * Validates and corrects a position to ensure the window remains accessible
+     * @param {number} x - Proposed X position
+     * @param {number} y - Proposed Y position  
+     * @param {number} width - Window width (optional, defaults to 350)
+     * @param {number} height - Window height (optional, defaults to 400)
+     * @returns {Object} Valid position {x, y}
+     */
+    validatePosition(x, y, width = 350, height = 400) {
+        const constraints = this.POSITION_CONSTRAINTS;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Calculate valid bounds ensuring window remains grabbable
+        const minX = constraints.minX;
+        const minY = constraints.minY;
+        const maxX = viewportWidth - constraints.minVisibleWidth;
+        const maxY = viewportHeight - constraints.minVisibleHeight;
+
+        // Correct invalid positions
+        let validX = x;
+        let validY = y;
+
+        // Horizontal constraints
+        if (validX < minX) {
+            validX = minX;
+        } else if (validX > maxX) {
+            validX = maxX;
+        }
+
+        // Vertical constraints (most important - prevent header overlap)
+        if (validY < minY) {
+            validY = minY;
+            console.warn(`Position validation: Corrected Y from ${y} to ${validY} (below header)`);
+        } else if (validY > maxY) {
+            validY = maxY;
+        }
+
+        // Log corrections for debugging
+        if (validX !== x || validY !== y) {
+            console.log(`Position validation: (${x}, ${y}) → (${validX}, ${validY})`);
+        }
+
+        return { x: validX, y: validY };
+    }
+
+    /**
+     * Legacy method for backward compatibility - now uses validatePosition
+     */
+    constrainPosition(x, y, width, height) {
+        return this.validatePosition(x, y, width, height);
+    }
+
+    /**
+     * Checks if a position would put the window in an inaccessible location
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @returns {boolean} True if position is valid/accessible
+     */
+    isPositionAccessible(x, y) {
+        const constraints = this.POSITION_CONSTRAINTS;
+        return y >= constraints.minY && 
+               x >= constraints.minX &&
+               x <= (window.innerWidth - constraints.minVisibleWidth) &&
+               y <= (window.innerHeight - constraints.minVisibleHeight);
     }
 
     getSmartPosition() {
@@ -325,15 +437,27 @@ class WindowSystem {
             zIndex: window.zIndex
         });
 
+        // Validate and correct position before restoring
+        const validPosition = this.validatePosition(
+            window.position.x, 
+            window.position.y, 
+            window.size.width, 
+            window.size.height
+        );
+        
+        // Update window config with validated position
+        window.position.x = validPosition.x;
+        window.position.y = validPosition.y;
+
         window.minimized = false;
         this.minimizedWindows.delete(id);
 
         // Show DOM element
         const element = document.querySelector(`[data-${window.type}-id="${id}"]`);
         if (element) {
-            console.log(`RESTORE: Found DOM element, applying styles:`, {
-                left: window.position.x + 'px',
-                top: window.position.y + 'px',
+            console.log(`RESTORE: Found DOM element, applying validated styles:`, {
+                left: validPosition.x + 'px',
+                top: validPosition.y + 'px',
                 width: window.size.width + 'px',
                 height: window.size.height + 'px',
                 zIndex: window.zIndex
@@ -341,9 +465,9 @@ class WindowSystem {
 
             element.style.display = '';
             
-            // Restore position and size
-            element.style.left = window.position.x + 'px';
-            element.style.top = window.position.y + 'px';
+            // Restore position and size with validated coordinates
+            element.style.left = validPosition.x + 'px';
+            element.style.top = validPosition.y + 'px';
             element.style.width = window.size.width + 'px';
             element.style.height = window.size.height + 'px';
             element.style.zIndex = window.zIndex;
@@ -610,19 +734,117 @@ class WindowSystem {
     // UTILITY METHODS
     // ==========================================
 
+    /**
+     * Scans all windows and automatically fixes any that are in inaccessible positions
+     * This includes windows stuck behind the header, off-screen, or otherwise unreachable
+     * @returns {number} Number of windows that were fixed
+     */
     fixStuckWindows() {
         let fixedCount = 0;
+        const fixes = [];
         
         this.windows.forEach((window, id) => {
-            if (window.position.y < this.HEADER_HEIGHT) {
-                console.log(`Moving window ${id} from y=${window.position.y} to y=${this.HEADER_HEIGHT}`);
-                this.moveWindow(id, window.position.x, this.HEADER_HEIGHT);
+            const originalPos = { x: window.position.x, y: window.position.y };
+            const validatedPos = this.validatePosition(
+                window.position.x, 
+                window.position.y, 
+                window.size.width, 
+                window.size.height
+            );
+            
+            // Check if position needed correction
+            if (originalPos.x !== validatedPos.x || originalPos.y !== validatedPos.y) {
+                const reason = [];
+                if (originalPos.y < this.POSITION_CONSTRAINTS.minY) {
+                    reason.push('behind header');
+                }
+                if (originalPos.x < this.POSITION_CONSTRAINTS.minX) {
+                    reason.push('left edge');
+                }
+                if (originalPos.x > window.innerWidth - this.POSITION_CONSTRAINTS.minVisibleWidth) {
+                    reason.push('right edge');
+                }
+                if (originalPos.y > window.innerHeight - this.POSITION_CONSTRAINTS.minVisibleHeight) {
+                    reason.push('bottom edge');
+                }
+                
+                fixes.push({
+                    id,
+                    from: originalPos,
+                    to: validatedPos,
+                    reason: reason.join(', ')
+                });
+                
+                // Apply the fix
+                this.moveWindow(id, validatedPos.x, validatedPos.y);
                 fixedCount++;
             }
         });
         
-        console.log(`Fixed ${fixedCount} stuck windows`);
+        if (fixedCount > 0) {
+            console.log(`🔧 Fixed ${fixedCount} stuck windows:`);
+            fixes.forEach(fix => {
+                console.log(`  Window ${fix.id}: (${fix.from.x}, ${fix.from.y}) → (${fix.to.x}, ${fix.to.y}) [${fix.reason}]`);
+            });
+        } else {
+            console.log('✅ No stuck windows found - all windows are accessible');
+        }
+        
         return fixedCount;
+    }
+
+    /**
+     * Validates all window positions and reports any issues without fixing them
+     * Useful for diagnostics and monitoring
+     * @returns {Array} Array of position issues found
+     */
+    scanForPositionIssues() {
+        const issues = [];
+        
+        this.windows.forEach((window, id) => {
+            const pos = window.position;
+            const size = window.size;
+            const constraints = this.POSITION_CONSTRAINTS;
+            
+            // Check various accessibility issues
+            if (pos.y < constraints.minY) {
+                issues.push({
+                    id,
+                    type: 'behind_header',
+                    position: pos,
+                    message: `Window ${id} is behind header (y=${pos.y} < ${constraints.minY})`
+                });
+            }
+            
+            if (pos.x < constraints.minX) {
+                issues.push({
+                    id,
+                    type: 'left_edge',
+                    position: pos,
+                    message: `Window ${id} is off left edge (x=${pos.x})`
+                });
+            }
+            
+            if (pos.x > window.innerWidth - constraints.minVisibleWidth) {
+                issues.push({
+                    id,
+                    type: 'right_edge',
+                    position: pos,
+                    message: `Window ${id} is off right edge`
+                });
+            }
+            
+            if (pos.y > window.innerHeight - constraints.minVisibleHeight) {
+                issues.push({
+                    id,
+                    type: 'bottom_edge',
+                    position: pos,
+                    message: `Window ${id} is off bottom edge`
+                });
+            }
+        });
+        
+        return issues;
     }
 
     enableDebug() {
@@ -631,7 +853,9 @@ class WindowSystem {
         console.log('Available commands:');
         console.log('- windowSystem.inspectWindow(id) - inspect specific window');
         console.log('- windowSystem.inspectAll() - inspect all windows');
-        console.log('- windowSystem.fixStuckWindows() - fix stuck windows');
+        console.log('- windowSystem.fixStuckWindows() - fix stuck windows automatically');
+        console.log('- windowSystem.scanForPositionIssues() - scan for position issues');
+        console.log('- windowSystem.validatePosition(x, y, w, h) - test position validation');
         console.log('- windowSystem.captureAllSpatialState() - capture state');
         console.log('- windowSystem.restoreSpatialState() - restore state');
     }
