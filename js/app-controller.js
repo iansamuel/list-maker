@@ -654,6 +654,14 @@ class AppController {
     }
 
     renderList(list, window) {
+        console.log(`RENDER: renderList called for list ${list.id} with window:`, {
+            hasWindow: !!window,
+            position: window?.position,
+            size: window?.size,
+            zIndex: window?.zIndex,
+            minimized: window?.minimized
+        });
+        
         const itemsHtml = this.renderItems(list.items, list.id, []);
         const position = window?.position || { x: 100, y: 200 };
         const size = window?.size || { width: 350, height: 400 };
